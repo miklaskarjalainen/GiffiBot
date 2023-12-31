@@ -81,15 +81,6 @@ pub struct GiffiBot {
     search_begin: std::time::Instant
 }
 
-/* pub trait GiffiBot {
-    fn evaluate(&self) -> i32;
-    fn search_all_captures(&mut self, alpha: i32, beta: i32) -> i32;
-    fn order_moves(&mut self, moves: &mut Vec<Move>);
-    fn zw_search(&mut self, beta: i32, depth: i32) -> i32;
-    fn search(&mut self, alpha: i32, beta:i32, depth: i32, ply_from_root: i32, line: &mut VecDeque<Move>) -> i32;
-    fn get_best_move(&mut self) -> Option<Move>;
-}*/
-
 impl GiffiBot {
     pub fn new() -> Self {
         Self {
