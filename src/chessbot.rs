@@ -3,7 +3,8 @@ use std::time::Duration;
 
 use bitschess::prelude::*;
 
-const THINK_TIME_MS: u64 = 1_800;
+const MIN_DEPTH: i32 = 1;
+const THINK_TIME_MS: u64 = 1_500;
 
 const PAWN_POSITION: [i32; 64] = [
     0,  0, 0, 0, 0, 0, 0, 0,
@@ -75,6 +76,7 @@ pub struct GiffiBot {
     pub board: ChessBoard,
 
     iterations: u64,
+    completed_depth: i32,
     search_cancelled: bool,
     pv: VecDeque<Move>,
 
@@ -88,6 +90,7 @@ impl GiffiBot {
             
             iterations: 0,
             search_cancelled: false,
+            completed_depth: 0,
             pv: VecDeque::new(),
 
             search_begin: std::time::Instant::now()
@@ -160,7 +163,7 @@ impl GiffiBot {
     */
     
     fn search_all_captures(&mut self, mut alpha: i32, beta: i32) -> i32 {
-        if self.search_cancelled { return 0; }
+        if self.search_cancelled && self.completed_depth >= MIN_DEPTH { return 0; }
 
         let mut eval = self.evaluate();
         if eval >= beta {
@@ -218,7 +221,7 @@ impl GiffiBot {
     }
 
     fn zw_search(&mut self, beta: i32, depth: i32) -> i32 {
-        if self.search_cancelled { return 0; }
+        if self.search_cancelled && self.completed_depth >= MIN_DEPTH { return 0; }
 
         if depth == 0 { 
             return self.search_all_captures(beta-1, beta);
@@ -240,7 +243,7 @@ impl GiffiBot {
     
     // https://www.reddit.com/r/chessprogramming/comments/m2m048/how_does_a_triangular_pvtable_work/
     fn search(&mut self, mut alpha: i32, beta:i32, depth: i32, ply_from_root: i32, line: &mut VecDeque<Move>) -> i32 {
-        if self.search_cancelled { return 0; }
+        if self.search_cancelled && self.completed_depth >= MIN_DEPTH { return 0; }
 
         if depth == 0 {
             line.clear();
@@ -280,7 +283,7 @@ impl GiffiBot {
             }
             self.board.unmake_move();
 
-            if self.search_cancelled {
+            if self.search_cancelled && self.completed_depth >= MIN_DEPTH {
                 return 0;
             }
             
@@ -297,7 +300,7 @@ impl GiffiBot {
         alpha
     }
     
-    pub fn get_best_move(&mut self) -> Option<Move> {
+    pub fn get_best_move(&mut self) -> Move {
         // Opening Book
         /*
         if self.full_moves < 12 {
@@ -315,14 +318,11 @@ impl GiffiBot {
             }
         }
         */
-        
-
-        self.iterations = 0;
-        self.search_begin = std::time::Instant::now();
 
         // Rust thread ptr casting trickery to avoid using mutexes :D
         // TODO: Just learnt about async functions in rust, they might be the "correct answer here". Gotta test the performance on those.
         self.search_cancelled = false;
+        
         let ptr: *mut bool = &mut self.search_cancelled;
         let ptr_casted = ptr as usize;
         std::thread::spawn(move || {
@@ -333,27 +333,32 @@ impl GiffiBot {
             }
         });
 
-        let mut best_line = VecDeque::new();
-        for depth in 3..=64 {
+        self.iterations = 0;
+        self.search_begin = std::time::Instant::now();
+        self.completed_depth = 0;
+        let mut best_completed_line = VecDeque::new();
 
+        for depth in 1..=64 {
             let mut line = VecDeque::new();
             self.search(-i32::MAX, i32::MAX, depth, 0, &mut line);
-            if !self.search_cancelled {
-                best_line = line.clone();
-                self.pv = line;
-
-                // Stats
-                let end = std::time::Instant::now();
-                let duration = end - self.search_begin;
-                println!("info depth {} currmove {} iterations {} duration_from_go {}", depth, self.pv.front().unwrap().to_uci(), self.iterations, duration.as_secs_f32()); 
-            }
-            else {
+            
+            if self.search_cancelled && self.completed_depth >= MIN_DEPTH {
                 break;
             }
-        }
-        self.pv = best_line;
 
-        self.pv.front().cloned()
+            // if search was cancelled, the line is going to be incomplete
+            best_completed_line = line;
+            self.pv = best_completed_line.clone();
+            self.completed_depth = depth;
+            
+            // Stats
+            let end = std::time::Instant::now();
+            let duration = end - self.search_begin;
+            println!("info depth {} currmove {} iterations {} duration_from_go {}", depth, self.pv.front().unwrap().to_uci(), self.iterations, duration.as_secs_f32()); 
+        }
+        self.pv = best_completed_line;
+
+        self.pv.front().cloned().unwrap()
     }
 
 }

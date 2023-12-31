@@ -108,12 +108,7 @@ impl UCI for GiffiBot {
                 }
                 "go" => {
                     let best_move = self.get_best_move();
-                    if let Some(m) = best_move {
-                        println!("bestmove {}", m.to_uci());
-                    }
-                    else {
-                        println!("bestmove a1a1");
-                    }
+                    println!("bestmove {}", best_move.to_uci());
                 }
                 "stop" => {}
 
