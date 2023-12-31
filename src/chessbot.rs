@@ -171,7 +171,7 @@ impl GiffiBot {
         }
         alpha = std::cmp::max(alpha, eval);
 
-        let mut captures = self.board.get_legal_moves();
+        let mut captures = self.board.get_legal_captures();
         self.order_moves(&mut captures);
 
         for m in captures {
