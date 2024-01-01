@@ -107,7 +107,7 @@ impl GiffiBot {
             all_pieces ^= 1u64 << square;
 
             let piece = self.board.get_piece(square);
-            let position = if piece.get_color() == PieceColor::White { square } else { 63-square };
+            let position = if piece.get_color() == PieceColor::Black { square } else { 63-square };
 
             let positional_scoring;
             match piece.get_piece_type() {
@@ -204,7 +204,7 @@ impl GiffiBot {
             let mut move_scope_quess = 0;
             
             if !capture_piece.is_none() {
-                move_scope_quess = 10 * capture_piece.get_piece_value() - move_piece.get_piece_value();
+                move_scope_quess = 10 * (capture_piece.get_piece_value() - move_piece.get_piece_value());
             }
             if m.get_flag() == MoveFlag::PromoteQueen {
                 move_scope_quess = 10 * PieceType::Queen.get_value();
