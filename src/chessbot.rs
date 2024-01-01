@@ -345,12 +345,14 @@ impl GiffiBot {
 
         for depth in 1..=64 {
             let mut line = VecDeque::new();
-            let eval = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line);
             
+            let perspective = if self.board.get_turn() == PieceColor::White { -1 } else { 1 };
+            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line) * perspective;
+
             if self.search_cancelled && self.completed_depth >= MIN_DEPTH {
                 break;
             }
-
+            
             // if search was cancelled, the line is going to be incomplete
             best_completed_line = line;
             self.pv = best_completed_line.clone();
@@ -359,7 +361,7 @@ impl GiffiBot {
             // Stats
             let end = std::time::Instant::now();
             let duration = end - self.search_begin;
-            println!("info depth {} score cp {} currmove {} iterations {} duration_from_go {}", depth, eval, self.pv.front().unwrap().to_uci(), self.iterations, duration.as_secs_f32()); 
+            println!("info depth {} score cp {} currmove {} iterations {} duration_from_go {}", depth, score, self.pv.front().unwrap().to_uci(), self.iterations, duration.as_secs_f32()); 
         }
         self.pv = best_completed_line;
 
