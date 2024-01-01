@@ -100,7 +100,12 @@ impl GiffiBot {
     pub fn evaluate(&self) -> i32 {
         let mut eval = 0i32;
 
-        for square in 0..64 {
+        let mut all_pieces = self.board.side_bitboards[0].get_bits() | self.board.side_bitboards[1].get_bits();
+
+        while all_pieces != 0 {
+            let square = BoardHelper::bitscan_forward(all_pieces);
+            all_pieces ^= 1u64 << square;
+
             let piece = self.board.get_piece(square);
             let position = if piece.get_color() == PieceColor::White { square } else { 63-square };
 
