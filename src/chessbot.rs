@@ -1,9 +1,11 @@
 mod transposition_table;
+pub mod masks;
 
 use std::collections::VecDeque;
 use std::time::Duration;
 use bitschess::prelude::*;
 use transposition_table::{TranspositionTable, NodeKind};
+use masks::PASSED_PAWN_MASK;
 
 const MIN_DEPTH: i32 = 1;
 const THINK_TIME_MS: u64 = 1_000;
@@ -74,6 +76,9 @@ const KING_POSITION: [i32; 64] = [
     20,  30,  10,   0,   0,  10,  30,  20,
 ];
 
+const DOUBLED_PAWN_PENALTY: i32 = 15; // applied per pawn a file. Doubled gets penalty applied twice and triple gets trice. 
+const PASSED_PAWN_REWARD: i32 = 25;
+
 pub struct GiffiBot {
     pub board: ChessBoard,
 
@@ -116,7 +121,11 @@ impl GiffiBot {
             let positional_scoring;
             match piece.get_piece_type() {
                 PieceType::Pawn => {
-                    positional_scoring = PAWN_POSITION[position as usize];
+                    let color = piece.get_color();
+                    let penalty = if self.contains_multiple_pawns_this_file(color, square) { DOUBLED_PAWN_PENALTY } else { 0 };
+                    let passed = if self.is_passed_pawn(color, square) {PASSED_PAWN_REWARD} else { 0 };
+                    
+                    positional_scoring = PAWN_POSITION[position as usize] + passed - penalty;
                 }
                 PieceType::Knight => {
                     positional_scoring = KNIGHT_POSITION[position as usize];
@@ -148,29 +157,20 @@ impl GiffiBot {
         return eval*perspective;
     }
 
-    // ! todo
-    /*
-    fn force_king_to_corner_endgame(&self, friendly_king: i32, opponent_king: i32, end_game_weight: f32) -> i32 {
-        let mut eval = 0;
-        
-        // Favour positions where opponent king has been forced away from the center
-        let (opp_king_file, opp_king_rank) = BoardHelper::file_and_rank(opponent_king);
-        
-        let opp_dst_to_center_file = std::cmp::max(3 - opp_king_file, opp_king_file - 4);
-        let opp_dst_to_center_rank = std::cmp::max(3 - opp_king_rank, opp_king_rank - 4);
-        let opp_distance_from_center = opp_dst_to_center_file + opp_dst_to_center_rank;
-        eval += opp_distance_from_center;
-        
-        // 
-        let (friendly_king_file, friendly_king_rank) = BoardHelper::file_and_rank(friendly_king);
-        let file_dst = (friendly_king_file - opp_king_file).abs();
-        let rank_dst = (friendly_king_rank - opp_king_rank).abs();
-        let dst_between_kings = file_dst + rank_dst;
-        eval += 14 - dst_between_kings;
-        (eval as f32 * 10.0 * end_game_weight) as i32
+    // r1bq1rk1/pp1p1ppp/2p2n2/2b5/3NP3/N1P2P2/PP4PP/R1BQK2R b KQ - 1 10 
+    pub fn contains_multiple_pawns_this_file(&self, color: PieceColor, square: i32) -> bool {
+        let file = BoardHelper::get_file(square);
+        let mask = (A_FILE << file) ^ (1 << square);
+        let pawns = self.board.bitboards[(color as usize) * 6].get_bits();
+        (mask & pawns) != 0
     }
-    */
-    
+
+    pub fn is_passed_pawn(&self, color: PieceColor, square: i32) -> bool {
+        let mask = PASSED_PAWN_MASK[color as usize][square as usize];
+        let enemy_pawns = self.board.bitboards[(color.flipped() as usize) * 6].get_bits();
+        (mask & enemy_pawns) == 0
+    }
+
     fn search_all_captures(&mut self, mut alpha: i32, beta: i32) -> i32 {
         if self.search_cancelled && self.completed_depth >= MIN_DEPTH { return 0; }
 
