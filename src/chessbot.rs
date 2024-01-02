@@ -1,10 +1,12 @@
+mod transposition_table;
+
 use std::collections::VecDeque;
 use std::time::Duration;
-
 use bitschess::prelude::*;
+use transposition_table::{TranspositionTable, NodeKind};
 
 const MIN_DEPTH: i32 = 1;
-const THINK_TIME_MS: u64 = 20_000;
+const THINK_TIME_MS: u64 = 1_000;
 
 const PAWN_POSITION: [i32; 64] = [
     0,  0, 0, 0, 0, 0, 0, 0,
@@ -80,7 +82,8 @@ pub struct GiffiBot {
     search_cancelled: bool,
     pv: VecDeque<Move>,
 
-    search_begin: std::time::Instant
+    search_begin: std::time::Instant,
+    transposition_table: TranspositionTable // TODO
 }
 
 impl GiffiBot {
@@ -93,7 +96,8 @@ impl GiffiBot {
             completed_depth: 0,
             pv: VecDeque::new(),
 
-            search_begin: std::time::Instant::now()
+            search_begin: std::time::Instant::now(),
+            transposition_table: TranspositionTable::new()
         }
     }
 
@@ -255,15 +259,15 @@ impl GiffiBot {
             return self.search_all_captures(alpha, beta);
         }
         let mut moves = self.board.get_legal_moves();
-        /*if self.is_draw() {
-            return 0;
-        } */
+
+        // Game Ended?
         if moves.len() == 0 {
             if self.board.is_king_in_check(self.board.get_turn()) {
                 return -i32::MAX + ply_from_root; // adding the distance from root, favours a mate which is closer in moves.
             }
             return 0; // draw
         }
+
         self.order_moves(&mut moves);
 
         let mut pv = VecDeque::new();
@@ -301,6 +305,7 @@ impl GiffiBot {
                 pv.insert(0, m.clone());
             }
         }
+
         *line = pv;
         alpha
     }
@@ -327,7 +332,7 @@ impl GiffiBot {
         // Rust thread ptr casting trickery to avoid using mutexes :D
         // TODO: Just learnt about async functions in rust, they might be the "correct answer here". Gotta test the performance on those.
         self.search_cancelled = false;
-        
+
         let ptr: *mut bool = &mut self.search_cancelled;
         let ptr_casted = ptr as usize;
         std::thread::spawn(move || {
