@@ -350,7 +350,7 @@ impl GiffiBot {
 
         for depth in 1..=64 {
             let mut line = VecDeque::new();
-            let perspective = if self.board.get_turn() == PieceColor::White { -1 } else { 1 };
+            let perspective = if self.board.get_turn() == PieceColor::White { 1 } else { -1 };
             let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line) * perspective;
 
             if self.search_cancelled && self.completed_depth >= MIN_DEPTH {
