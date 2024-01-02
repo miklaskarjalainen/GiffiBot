@@ -151,16 +151,7 @@ impl UCI for GiffiBot {
                     for chessmove in arg_iter {
                         if chessmove.is_empty() { continue; }
 
-                        self.board.make_move_uci(chessmove);
-
-                        /*
-                        if !found {
-                            println!("illegal move! '{}' size {}", chessmove, chessmove.len());
-                            println!("turn {:?}", self.turn);
-                            println!("{}", self);
-                        }
-                        */
-                        
+                        self.board.make_move_uci(chessmove);                        
                     }
                 }
                 _ => { return None; }

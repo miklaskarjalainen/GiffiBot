@@ -4,7 +4,7 @@ use std::time::Duration;
 use bitschess::prelude::*;
 
 const MIN_DEPTH: i32 = 1;
-const THINK_TIME_MS: u64 = 1_500;
+const THINK_TIME_MS: u64 = 20_000;
 
 const PAWN_POSITION: [i32; 64] = [
     0,  0, 0, 0, 0, 0, 0, 0,
@@ -262,7 +262,7 @@ impl GiffiBot {
             if self.board.is_king_in_check(self.board.get_turn()) {
                 return -i32::MAX + ply_from_root; // adding the distance from root, favours a mate which is closer in moves.
             }
-            return 0;
+            return 0; // draw
         }
         self.order_moves(&mut moves);
 
@@ -345,7 +345,6 @@ impl GiffiBot {
 
         for depth in 1..=64 {
             let mut line = VecDeque::new();
-            
             let perspective = if self.board.get_turn() == PieceColor::White { -1 } else { 1 };
             let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line) * perspective;
 
