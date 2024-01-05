@@ -76,6 +76,7 @@ const KING_POSITION: [i32; 64] = [
     20,  30,  10,   0,   0,  10,  30,  20,
 ];
 
+const MAX_MOVE_EXTENSIONS: u8 = 15;
 const DOUBLED_PAWN_PENALTY: i32 = 15; // applied per pawn a file. Doubled gets penalty applied twice and triple gets trice. 
 const PASSED_PAWN_REWARD: i32 = 25;
 
@@ -249,9 +250,24 @@ impl GiffiBot {
         }
         return beta-1; // fail-hard, return alpha
     }
+
+    pub fn get_extension(&self, chess_move: Move, extension_count: u8) -> u8 {
+        if extension_count > MAX_MOVE_EXTENSIONS {
+            return 0;
+        }
+
+        if self.board.is_king_in_check(self.board.turn) {
+            return 1;
+        }
+        if chess_move.get_flag() == MoveFlag::PromoteQueen {
+            return 1;
+        }
+
+        0
+    }
     
     // https://www.reddit.com/r/chessprogramming/comments/m2m048/how_does_a_triangular_pvtable_work/
-    fn search(&mut self, mut alpha: i32, beta:i32, depth: i32, ply_from_root: i32, line: &mut VecDeque<Move>) -> i32 {
+    fn search(&mut self, mut alpha: i32, beta:i32, depth: i32, ply_from_root: i32, line: &mut VecDeque<Move>, extension_count: u8) -> i32 {
         if self.search_cancelled && self.completed_depth >= MIN_DEPTH { return 0; }
 
         if depth == 0 {
@@ -273,11 +289,13 @@ impl GiffiBot {
         let mut pv = VecDeque::new();
         let mut do_pv_search = true;
         for m in moves {
+            let extension = self.get_extension(m, extension_count);
+
             self.iterations += 1;
             self.board.make_move(m, true);
             let mut eval;
             if do_pv_search {
-                eval = -self.search(-beta, -alpha, depth - 1, ply_from_root + 1, &mut pv);
+                eval = -self.search(-beta, -alpha, depth - 1 + (extension as i32), ply_from_root + 1, &mut pv, extension_count + extension);
                 // give a little bonus for castling
                 if m.get_flag() == MoveFlag::Castle { 
                     eval -= 80;
@@ -287,7 +305,7 @@ impl GiffiBot {
                 // proof that the move is bad
                 eval = -self.zw_search(-alpha, depth - 1);
                 if eval > alpha {
-                    eval = -self.search(-beta, -alpha, depth - 1, ply_from_root + 1, &mut pv);
+                    eval = -self.search(-beta, -alpha, depth - 1 + (extension as i32), ply_from_root + 1, &mut pv, extension_count + extension);
                 }
             }
             self.board.unmake_move();
@@ -351,7 +369,7 @@ impl GiffiBot {
         for depth in 1..=64 {
             let mut line = VecDeque::new();
             let perspective = if self.board.get_turn() == PieceColor::White { 1 } else { -1 };
-            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line) * perspective;
+            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line, 0) * perspective;
 
             if self.search_cancelled && self.completed_depth >= MIN_DEPTH {
                 break;
