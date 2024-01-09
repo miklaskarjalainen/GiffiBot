@@ -6,5 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bitschess = { git = "https://github.com/miklaskarjalainen/BitsChess.git", rev = "fb4983d" }
+bitschess = { git = "https://github.com/miklaskarjalainen/BitsChess.git", rev = "1add12d" }
 lazy_static = "1.4.0"

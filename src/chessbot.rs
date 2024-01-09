@@ -274,8 +274,12 @@ impl GiffiBot {
             line.clear();
             return self.search_all_captures(alpha, beta);
         }
-        let mut moves = self.board.get_legal_moves();
 
+        if self.board.is_draw() {
+            return 0;
+        }
+
+        let mut moves = self.board.get_legal_moves();
         // Game Ended?
         if moves.len() == 0 {
             if self.board.is_king_in_check(self.board.get_turn()) {

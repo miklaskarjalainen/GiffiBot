@@ -101,7 +101,7 @@ impl UCI for GiffiBot {
                     println!("readyok");
                 }
                 "ucinewgame" => {
-
+                    self.board.clear();
                 }
                 "position" => {
                     self.parse_position(&mut args);
