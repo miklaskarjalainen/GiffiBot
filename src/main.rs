@@ -2,7 +2,7 @@
 mod chessbot;
 mod uci;
 
-use bitschess::prelude::*;
+use bitschess::chessboard::board::fen::STARTPOS_FEN;
 use chessbot::GiffiBot;
 use uci::UCI;
 
@@ -10,7 +10,7 @@ fn main() {
     let mut bot = GiffiBot::new();
     
     println!("GiffiBot!");
-    bot.board.parse_fen(STARTPOS_FEN);
+    bot.board.parse_fen(STARTPOS_FEN).unwrap();
     
     loop {
 
