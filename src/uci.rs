@@ -127,7 +127,7 @@ impl UCI for GiffiBot {
         if let Some(arg1) = arg_iter.next() {
             match *arg1 {
                 "startpos" => { 
-                    self.board.parse_fen(STARTPOS_FEN);
+                    self.board.parse_fen(STARTPOS_FEN).expect("valid fen");
                 }
                 "fen" => {
                     let mut whole_fen = String::from("");
@@ -137,7 +137,11 @@ impl UCI for GiffiBot {
                         whole_fen.push_str(arg_iter.next().unwrap());
                         whole_fen.push(' ');
                     }
-                    self.board.parse_fen(&whole_fen);
+
+                    if let Err(error) = self.board.parse_fen(&whole_fen) {
+                        println!("FEN PARSE ERROR: {:?}", error);
+                    }
+
                 }
                 _ => { return None; }
             }
