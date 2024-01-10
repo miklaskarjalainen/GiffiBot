@@ -3,6 +3,8 @@ GiffiBot is a [UCI](https://www.chessprogramming.org/UCI) chess engine written i
 
 The bot is currently very much Work In Progress and is very primitive and lacks a lot of features.
 
+GiffiBot will soon be available to play against at [Lichess](https://lichess.org/@/GiffiBot). For now a [Chess GUI](https://www.chessprogramming.org/GUI) application like [Arena](http://www.playwitharena.de/) can be used to play against the AI.
+
 ## Building
 
 You need a working rust development environment.  
@@ -13,7 +15,7 @@ cd GiffiBot
 cargo build --release
 ```
 
-## Usage
+## Usage (Command Line)
 
 After launching the engine you're proceeded with the a console. The bot communicates through [UCI](https://www.chessprogramming.org/UCI).  
 Using the engine in it's simplest form through the console is done as follows.
@@ -33,6 +35,21 @@ position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 moves e2e4
 go depth 5 
 # let GiffiBot calculate for 100ms
 go movetime 100
+```
+
+Example of usage:
+```bash
+position startpos # initializes startpos
+go movetime 1000 # let the bot think for a move for 1000ms = 1s
+# engine outputs: "bestmove e2e4" which means that giffibot thinks that the best move for this position is e2->e4 
+
+position startpos moves e2e4 
+go movetime 1000
+# engine outputs: "bestmove e7e5"
+
+position startpos moves e2e4 e7e5
+go movetime 1000
+# engine outputs: "bestmove d2d4"
 ```
 
 A complete list of UCI commands is in [here](https://gist.github.com/DOBRO/2592c6dad754ba67e6dcaec8c90165bf)
