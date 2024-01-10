@@ -8,7 +8,6 @@ use transposition_table::{TranspositionTable, NodeKind};
 use masks::PASSED_PAWN_MASK;
 
 const MIN_DEPTH: i32 = 1;
-const THINK_TIME_MS: u64 = 1_000;
 
 const PAWN_POSITION: [i32; 64] = [
     0,  0, 0, 0, 0, 0, 0, 0,
@@ -231,7 +230,9 @@ impl GiffiBot {
     }
 
     fn zw_search(&mut self, beta: i32, depth: i32) -> i32 {
-        if self.search_cancelled && self.completed_depth >= MIN_DEPTH { return 0; }
+        if self.search_cancelled {
+            return 0;
+        }
 
         if depth == 0 { 
             return self.search_all_captures(beta-1, beta);
@@ -268,7 +269,9 @@ impl GiffiBot {
     
     // https://www.reddit.com/r/chessprogramming/comments/m2m048/how_does_a_triangular_pvtable_work/
     fn search(&mut self, mut alpha: i32, beta:i32, depth: i32, ply_from_root: i32, line: &mut VecDeque<Move>, extension_count: u8) -> i32 {
-        if self.search_cancelled && self.completed_depth >= MIN_DEPTH { return 0; }
+        if self.search_cancelled {
+            return 0;
+        }
 
         if depth == 0 {
             line.clear();
@@ -332,39 +335,30 @@ impl GiffiBot {
         alpha
     }
     
-    pub fn get_best_move(&mut self) -> Move {
-        // Opening Book
-        /*
-        if self.full_moves < 12 {
-            let fen = Fen::to_fen(self);
-            
-            if let Some(opening) = self.opening_book.get_opening(&fen) {
-                if let Some(cmd) = opening.first() {
-                    let moves = self.get_legal_moves();
-                    let mut moves_filtered: Vec<Move> = moves.into_iter().filter(|m| &m.to_string() == cmd).collect();
-                    if let Some(m) = moves_filtered.pop() {
-                        println!("Chose a move from the opening book!");
-                        return Some(m);
-                    }
-                }
-            }
-        }
-        */
+    /// Calculates until search_cancelled is set to true
+    #[inline(always)]
+    pub fn calculate(&mut self) {
+        const MAX_DEPTH: i32 = 256; // there is no way we're reaching depth 256 in our lifetime :D
+        self.calculate_depth(MAX_DEPTH);
+    }
 
-        // Rust thread ptr casting trickery to avoid using mutexes :D
-        // TODO: Just learnt about async functions in rust, they might be the "correct answer here". Gotta test the performance on those.
-        self.search_cancelled = false;
-
+    #[inline(always)]
+    pub fn calculate_time(&mut self, time: std::time::Duration) {
         let ptr: *mut bool = &mut self.search_cancelled;
         let ptr_casted = ptr as usize;
         std::thread::spawn(move || {
             let p = ptr_casted as *mut bool;
-            std::thread::sleep(Duration::from_millis(THINK_TIME_MS));
+            std::thread::sleep(time);
             unsafe {
                 *p = true;
             }
         });
 
+        self.calculate();
+    }
+
+    pub fn calculate_depth(&mut self, depth: i32) {
+        self.search_cancelled = false;
         self.iterations = 0;
         self.search_begin = std::time::Instant::now();
         self.completed_depth = 0;
@@ -391,7 +385,7 @@ impl GiffiBot {
         }
         self.pv = best_completed_line;
 
-        self.pv.front().cloned().unwrap()
+        println!("bestmove {}", self.pv.front().cloned().unwrap().to_uci());
     }
 
 }

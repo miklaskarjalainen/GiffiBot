@@ -107,8 +107,7 @@ impl UCI for GiffiBot {
                     self.parse_position(&mut args);
                 }
                 "go" => {
-                    let best_move = self.get_best_move();
-                    println!("bestmove {}", best_move.to_uci());
+                    self.calculate_time(std::time::Duration::from_millis(500));
                 }
                 "stop" => {}
 
