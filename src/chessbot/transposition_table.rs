@@ -42,7 +42,7 @@ impl TranspositionEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TranspositionTable {
     table: Vec<TranspositionEntry>, // test static arrays and vectors
 
