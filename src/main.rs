@@ -1,32 +1,25 @@
-
 mod chessbot;
 mod uci;
 
 use bitschess::chessboard::board::fen::STARTPOS_FEN;
-use chessbot::GiffiBot;
-use uci::UCI;
+use uci::UCIEngine;
 
 fn main() {
-    let mut bot = GiffiBot::new();
-    
+    let mut uci = UCIEngine::new();
+    uci.board.parse_fen(STARTPOS_FEN).expect("valid fen");
+
     println!("GiffiBot!");
-    bot.board.parse_fen(STARTPOS_FEN).unwrap();
-    
     loop {
 
         let line = std::io::stdin().lines().next().unwrap().unwrap();
-
-        if &line == "exit" {
-            break;
-        }
-        else if &line == "board" {
-            println!("{}", bot.board);
-        }
-        else if &line == "quit" {
+        
+        if &line == "quit" {
             return;
         }
         else {
-            bot.execute_cmd(&line);
+            if let Err(e) = uci.execute_cmd(&line) {
+                println!("{:?}", e);
+            }
         }
     }
 }

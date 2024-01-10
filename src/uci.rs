@@ -1,97 +1,44 @@
-use bitschess::prelude::*;
 
+use std::sync::{ Arc, atomic::AtomicBool};
+
+use bitschess::prelude::*;
 use crate::chessbot::GiffiBot;
 
-pub trait UCI {
-    fn execute_dev(&mut self, cmd: &String);
-    fn execute_cmd(&mut self, message: &String);
-    fn parse_position(&mut self, args: &mut Vec<&str>) -> Option<()>;
+#[derive(Debug)]
+pub enum UciParseError {
+    InvalidSyntax,
 }
 
-impl UCI for GiffiBot {
-    fn execute_dev(&mut self, cmd: &String) {
-        let mut args: Vec<&str> = cmd.split(' ').collect();
-        args.reverse();
+pub struct UCIEngine {
+    pub board: ChessBoard,
+    stop_search: Arc<AtomicBool>,
+}
 
-        // move cmd
-        if args.len() == 1 {
-            if cmd == "undo" {
-                self.board.unmake_move();
-            }
-            else if cmd == "eval" {
-                println!("eval: {}", self.evaluate());
-            }
-            else if cmd == "hash" {
-                todo!();
-            }
-            else if cmd == "fen" {
-                todo!();
-            }
-            else {
-                let mut moves: Vec<Move> = self.board.get_legal_moves().into_iter().filter(|m| &m.to_uci() == cmd).collect();
-                if let Some(m) = moves.pop() {
-                    self.board.make_move(m, false);
-                    println!("Moved {}", cmd);
-                }
-                else {
-                    println!("Illegal move!");
-                }
-            }
-        }
-        else if args.len() == 2 {
-            let command = args.pop().unwrap();
-            if command == "moves" {
-                let square = BoardHelper::text_to_square(&args.last().unwrap()[0..2]);
-                let moves = self.board.get_legal_moves_for_square(square);
-
-                let mut str = String::from("");
-                for y in (0..=7).rev() {
-                    str.push('|');
-                    for x in 0..=7 {
-                        str.push(self.board.get_piece(y * CHESSBOARD_WIDTH + x).to_char());
-                        for m in &moves {
-                            if m.get_to_idx() == (y*CHESSBOARD_WIDTH+x) {
-                                str.pop().unwrap();
-                                str.push('*');
-                                break;
-                            }
-                        }
-                        str.push('|');
-                    }
-                    str.push('\n');
-                }
-                println!("{}", str);
-            }
-            else if command == "perft" {
-                match args.last().expect(":^(").parse::<u32>() {
-                    Ok(depth) => {
-                        let begin = std::time::Instant::now();
-                        self.board.perft(depth, true);
-                        let duration = std::time::Instant::now() - begin;
-    
-                        println!("perft took: {:?}", duration);
-                    }
-                    Err(_) => {
-                        println!("error while parsing numerical value")
-                    }
-                }
-            }
-            else {
-                println!("invalid command");
-            }
-        }
-        else {
-            println!("invalid command");
+impl UCIEngine {
+    pub fn new() -> Self {
+        Self {
+            stop_search: Arc::new(AtomicBool::new(false)),
+            board: ChessBoard::new(),
         }
     }
 
-    // cmd "d1d2" -> move d1 to d2
-    fn execute_cmd(&mut self, message: &String) {
-        let mut args: Vec<&str> = message.split(' ').collect();
-        args.reverse();
+    pub fn execute_cmd(&mut self, message: &String) -> Result<(), UciParseError> {
+        let mut args = message.split(' ').collect::<Vec<&str>>().into_iter().peekable();
 
-        if let Some(cmd) = args.pop() {
+        if let Some(cmd) = args.next() {
             match cmd {
+                // Dev commands
+                "undo" => {
+                    self.board.unmake_move();
+                }
+                "fen" => {
+                    println!("FEN {}", self.board.to_fen());
+                }
+                "board" | "d" => {
+                    println!("{}", self.board);
+                }
+
+                // UCI commands
                 "uci" => {
                     println!("id name GiffiBot");
                     println!("id author Miklas ('Giffi') Karjalainen");
@@ -104,27 +51,115 @@ impl UCI for GiffiBot {
                     self.board.clear();
                 }
                 "position" => {
-                    self.parse_position(&mut args);
+                    return self.parse_position(&mut args);
                 }
-                "go" => {
-                    self.calculate_time(std::time::Duration::from_millis(500));
-                }
-                "stop" => {}
 
+                "go" => {
+                    // Prepare to start search
+                    use std::sync::atomic::Ordering;
+                    self.stop_search.store(false, Ordering::Relaxed);
+                    let board_copy = self.board.clone();
+                    let cancelled_copy = Arc::clone(&self.stop_search);
+
+                    while args.peek().is_some() {
+                        let argument = args.next().unwrap();
+
+                        match argument {
+                            "wtime" | "btime" | "winc" | "binc" | "movestogo" => {
+                                if args.next().is_none() {
+                                    return Err(UciParseError::InvalidSyntax);
+                                }
+                            }
+
+                            "movetime" => {
+                                if args.peek().is_none() {
+                                    return Err(UciParseError::InvalidSyntax);
+                                }
+
+                                let time = args.next().unwrap().parse::<u64>();
+                                if time.is_err() {
+                                    return Err(UciParseError::InvalidSyntax);
+                                }
+
+                                let search_time = std::time::Duration::from_millis(time.unwrap());
+                                let _ = std::thread::spawn(move || {
+                                    let mut bot = GiffiBot::new(board_copy, cancelled_copy);
+                                    bot.calculate_time(search_time);
+                                });
+
+                                return Ok(());
+                            }
+
+                            "depth" => {
+                                if args.peek().is_none() {
+                                    return Err(UciParseError::InvalidSyntax);
+                                }
+
+                                let depth = args.next().unwrap().parse::<i32>();
+                                if depth.is_err() {
+                                    return Err(UciParseError::InvalidSyntax);
+                                }
+
+                                let search_depth = depth.unwrap();
+                                let _ = std::thread::spawn(move || {
+                                    let mut bot = GiffiBot::new(board_copy, cancelled_copy);
+                                    bot.calculate_depth(search_depth);
+                                });
+
+                                return Ok(());
+                            }
+
+                            "infinite" => {
+                                let _ = std::thread::spawn(move || {
+                                    let mut bot = GiffiBot::new(board_copy, cancelled_copy);
+                                    bot.calculate();
+                                });
+                                return Ok(());
+                            }
+
+                            "perft" => {
+                                if args.peek().is_none() {
+                                    return Err(UciParseError::InvalidSyntax);
+                                }
+
+                                let depth = args.next().unwrap().parse::<u32>();
+                                if depth.is_err() {
+                                    return Err(UciParseError::InvalidSyntax);
+                                }
+
+                                let search_depth = depth.unwrap();
+                                self.board.perft(search_depth, true);
+                                return Ok(());
+                            }
+                            
+                            _ => {
+                                println!("UCI: unsupported argument '{}'", argument);
+                            }
+                        }
+                    }    
+
+                    let _ = std::thread::spawn(move || {
+                        let mut bot = GiffiBot::new(board_copy, cancelled_copy);
+                        bot.calculate_time(std::time::Duration::from_millis(100));
+                    });
+                    return Ok(());                
+                }
+                "stop" => {
+                    use std::sync::atomic::Ordering;
+                    self.stop_search.store(true, Ordering::Relaxed);
+                }
                 _ => { 
-                    self.execute_dev(message);
+                    return Err(UciParseError::InvalidSyntax);
                 }
             }
         }
-
+        Ok(())
     }
 
-    fn parse_position(&mut self, args: &mut Vec<&str>) -> Option<()> {
-        let mut arg_iter = args.iter().rev().peekable();
-        
+    fn parse_position(&mut self, arg_iter: &mut std::iter::Peekable<std::vec::IntoIter<&str>>) -> Result<(), UciParseError> {        
         // startpos or fen
         if let Some(arg1) = arg_iter.next() {
-            match *arg1 {
+            match arg1 {
                 "startpos" => { 
                     self.board.parse_fen(STARTPOS_FEN).expect("valid fen");
                 }
@@ -132,23 +167,24 @@ impl UCI for GiffiBot {
                     let mut whole_fen = String::from("");
 
                     while let Some(fen_portion) = arg_iter.peek() {
-                        if **fen_portion == "moves" { break; }
+                        if *fen_portion == "moves" { break; }
                         whole_fen.push_str(arg_iter.next().unwrap());
                         whole_fen.push(' ');
                     }
 
                     if let Err(error) = self.board.parse_fen(&whole_fen) {
                         println!("FEN PARSE ERROR: {:?}", error);
+                        return Err(UciParseError::InvalidSyntax);
                     }
 
                 }
-                _ => { return None; }
+                _ => { return Err(UciParseError::InvalidSyntax); }
             }
         }
 
         // startpos or fen
         if let Some(arg1) = arg_iter.next() {
-            match *arg1 {
+            match arg1 {
                 // position startpos moves e2e4 b7b5 d2d3 b8a6 glf3 e7e5 c2c3 d8g5 h2h4
                 "moves" => { 
                     for chessmove in arg_iter {
@@ -157,11 +193,12 @@ impl UCI for GiffiBot {
                         self.board.make_move_uci(chessmove);                        
                     }
                 }
-                _ => { return None; }
+                _ => { return Err(UciParseError::InvalidSyntax); }
             }
         }
 
-        Some(())
+        Ok(())
     }
 
 }
+
