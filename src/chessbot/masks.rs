@@ -14,6 +14,16 @@ lazy_static! {
         }
         map
     };
+
+    pub static ref MANHATTAN_DISTANCE: [[i32; 64]; 64] = {
+        let mut map = [[0; 64]; 64];
+        for from in 0..64 {
+            for to in 0..64 {
+                map[from as usize][to as usize] = manhattan_distance(from, to);
+            }
+        }
+        map
+    };
 }
 
 
@@ -41,4 +51,15 @@ fn generate_passed_pawn_mask(color: PieceColor, square: i32) -> u64 {
     rank_mask & file_mask
 }
 
+// https://www.chessprogramming.org/Manhattan-Distance
+fn manhattan_distance(from_square: i32, to_square: i32) -> i32 {
+    let file1 = BoardHelper::get_file(from_square);
+    let file2 = BoardHelper::get_file(to_square);
+    let rank1 = BoardHelper::get_rank(from_square);
+    let rank2 = BoardHelper::get_rank(to_square);
+
+    let rank_distance = rank2.wrapping_sub(rank1).abs();
+    let file_distance = file2.wrapping_sub(file1).abs();
+    rank_distance + file_distance
+}
 

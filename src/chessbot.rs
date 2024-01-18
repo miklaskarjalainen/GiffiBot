@@ -77,6 +77,28 @@ const KING_POSITION: [i32; 64] = [
     20,  30,  10,   0,   0,  10,  30,  20,
 ];
 
+const KING_POSITION_END: [i32; 64] = [
+    -20, -10, -10, -10, -10, -10, -10, -20,
+    -5,    0,   5,   5,   5,   5,   0,  -5,
+    -10,  -5,  20,  30,  30,  20,  -5, -10,
+    -15, -10,  35,  45,  45,  35, -10, -15,
+    -20, -15,  30,  40,  40,  30, -15, -20,
+    -25, -20,  25,  25,  25,  20, -20, -25,
+    -30, -25,   0,   0,   0,   0, -25, -30,
+    -50, -30, -30, -30, -30, -30, -30, -50
+];
+
+const CENTER_MANHATTAN_DISTANCE: [i32; 64] = [ // char is sufficient as well, also unsigned
+    6, 5, 4, 3, 3, 4, 5, 6,
+    5, 4, 3, 2, 2, 3, 4, 5,
+    4, 3, 2, 1, 1, 2, 3, 4,
+    3, 2, 1, 0, 0, 1, 2, 3,
+    3, 2, 1, 0, 0, 1, 2, 3,
+    4, 3, 2, 1, 1, 2, 3, 4,
+    5, 4, 3, 2, 2, 3, 4, 5,
+    6, 5, 4, 3, 3, 4, 5, 6
+];
+
 const MAX_MOVE_EXTENSIONS: u8 = 15;
 const DOUBLED_PAWN_PENALTY: i32 = 15; // applied per pawn a file. Doubled gets penalty applied twice and triple gets trice. 
 const PASSED_PAWN_REWARD: i32 = 25;
@@ -108,10 +130,22 @@ impl GiffiBot {
         }
     }
 
+    pub fn is_end_game(&self) -> bool {
+        let bishops = self.board.bitboards[PieceType::Bishop.get_side_index(PieceColor::White)].get_bits() | self.board.bitboards[PieceType::Bishop.get_side_index(PieceColor::Black)].get_bits(); 
+        let rooks   = self.board.bitboards[PieceType::Rook  .get_side_index(PieceColor::White)].get_bits() | self.board.bitboards[PieceType::Rook  .get_side_index(PieceColor::Black)].get_bits(); 
+        let queens  = self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::White)].get_bits() | self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::Black)].get_bits(); 
+
+        // Trigger under 4 rooks
+        const MATERIAL_4_ROOKS: i32 = PieceType::Rook.get_value() * 4;
+        let material_count = (BoardHelper::count_bits(bishops) * PieceType::Bishop.get_value()) + (BoardHelper::count_bits(rooks) * PieceType::Rook.get_value()) + (BoardHelper::count_bits(queens) * PieceType::Queen.get_value());
+        material_count < MATERIAL_4_ROOKS
+    } 
+
     pub fn evaluate(&self) -> i32 {
         let mut eval = 0i32;
 
         let mut all_pieces = self.board.side_bitboards[0].get_bits() | self.board.side_bitboards[1].get_bits();
+        let end_game = self.is_end_game();
 
         while all_pieces != 0 {
             let square = BoardHelper::bitscan_forward(all_pieces);
@@ -142,7 +176,13 @@ impl GiffiBot {
                     positional_scoring = QUEEN_POSITION[position as usize]; //+ bonus;
                 }
                 PieceType::King => {
-                    positional_scoring = KING_POSITION[position as usize];
+                    if !end_game {
+                        positional_scoring = KING_POSITION[position as usize];
+                    }
+                    else {
+                        // In endgames, prefer having king in the middle and forcing the enemy king into the corner or edge.
+                        positional_scoring = KING_POSITION_END[position as usize] + CENTER_MANHATTAN_DISTANCE[self.board.get_king_square(piece.get_color().flipped()) as usize] * 10;
+                    }
                 }
                 _ => { positional_scoring = 0; }
             }
