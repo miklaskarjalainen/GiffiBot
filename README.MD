@@ -3,7 +3,8 @@ GiffiBot is a [UCI](https://www.chessprogramming.org/UCI) chess engine written i
 
 The bot is currently very much Work In Progress and is very primitive and lacks a lot of features.
 
-GiffiBot will soon be available to play against at [Lichess](https://lichess.org/@/GiffiBot). For now a [Chess GUI](https://www.chessprogramming.org/GUI) application like [Arena](http://www.playwitharena.de/) can be used to play against the AI.
+GiffiBot is (if you're lucky that is) available to play against at [Lichess](https://lichess.org/@/GiffiBot).
+You can also use a [Chess GUI](https://www.chessprogramming.org/GUI) locally like [Arena](http://www.playwitharena.de/) can be used to play against the AI.
 
 ## Building
 
