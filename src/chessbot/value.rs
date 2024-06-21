@@ -5,6 +5,7 @@ use super::masks::PASSED_PAWN_MASK;
 
 const DOUBLED_PAWN_PENALTY: i32 = 15; // applied per pawn a file. Doubled gets penalty applied twice and triple gets trice. 
 const PASSED_PAWN_REWARD: i32 = 25;
+const PUSH_PAWNS_TOWARDS_KING: i32 = 10; // reward for a pawn being +/- 1 file and on the same rank as an enemy king
 const ROOKS_CONNECTED_REWARD: i32 = 80;
 const PAWN_POSITION: [i32; 64] = [
     0,  0, 0, 0, 0, 0, 0, 0,
@@ -122,8 +123,9 @@ impl GiffiBot {
                     let color = piece.get_color();
                     let penalty = if self.contains_multiple_pawns_this_file(color, square) { DOUBLED_PAWN_PENALTY } else { 0 };
                     let passed = if self.is_passed_pawn(color, square) {PASSED_PAWN_REWARD} else { 0 };
+                    let atk_king = if self.pawn_same_side_as_enemy_king(color, square) {PUSH_PAWNS_TOWARDS_KING} else { 0 };
                     
-                    positional_scoring = PAWN_POSITION[position as usize] + passed - penalty;
+                    positional_scoring = PAWN_POSITION[position as usize] + passed + atk_king - penalty;
                 }
                 PieceType::Knight => {
                     positional_scoring = KNIGHT_POSITION[position as usize];
@@ -174,6 +176,15 @@ impl GiffiBot {
         let mask = PASSED_PAWN_MASK[color as usize][square as usize];
         let enemy_pawns = self.board.bitboards[(color.flipped() as usize) * 6];
         (mask & enemy_pawns) == 0
+    }
+
+    #[inline(always)]
+    pub fn pawn_same_side_as_enemy_king(&self, color: PieceColor, square: i32) -> bool {
+        const KING_INDEX: usize = PieceType::King.get_index();
+        let color_index = (color.flipped() as usize) * 6;
+        let mask = PASSED_PAWN_MASK[color as usize][square as usize];
+        let enemy_king = self.board.bitboards[color_index + KING_INDEX];
+        (mask & enemy_king) != 0
     }
 
     // TODO
@@ -228,4 +239,26 @@ mod test {
         assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::Black, Square::G7 as i32), true);
     }
 
+    #[test]
+    fn pawn_same_side_as_enemy_king_test1() {
+        let mut board = ChessBoard::new();
+        board.parse_fen("6k1/5ppp/8/8/8/8/PPP2PPP/1K6 w - - 0 1").expect("valid fen");
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let bot = GiffiBot::new(board, stop);
+
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::White, Square::A2 as i32), false);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::White, Square::B2 as i32), false);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::White, Square::C2 as i32), false);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::White, Square::F2 as i32), true);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::White, Square::G2 as i32), true);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::White, Square::H2 as i32), true);
+        
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::Black, Square::A7 as i32), true);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::Black, Square::B7 as i32), true);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::Black, Square::C7 as i32), true);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::Black, Square::F7 as i32), false);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::Black, Square::G7 as i32), false);
+        assert_eq!(bot.pawn_same_side_as_enemy_king(PieceColor::Black, Square::H7 as i32), false);
+    }
 }
