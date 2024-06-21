@@ -82,33 +82,38 @@ impl GiffiBot {
     }
 
     fn order_moves(&mut self, moves: &mut MoveContainer) {
+        // if PV used, keep PV first and order the moves starting from the second index.
+        let start_index = !self.pv.is_empty() as usize;
+        if let Some(pv_move) = self.pv.pop_front() {
+            if let Some(position) = moves.iter().position(|m| m == &pv_move) {
+                unsafe { moves.swap_unchecked(0, position) };
+            }
+        }
+        
         let mut current_best = 0;
-
-        for idx in 0..moves.len() {
+        for idx in start_index..moves.len() {
             let m = unsafe { moves.get_unchecked(idx) };
             let move_piece = self.board.get_piece(m.get_from_idx());
             let capture_piece = self.board.get_piece(m.get_to_idx());
-
-            let mut move_scope_quess = 0;
+            
+            let mut move_scope_guess = 0;
             
             if !capture_piece.is_none() {
-                move_scope_quess = 10 * (value::get_piece_value(capture_piece.get_piece_type()) - value::get_piece_value(move_piece.get_piece_type()));
+                move_scope_guess = value::get_piece_value(capture_piece.get_piece_type()) - value::get_piece_value(move_piece.get_piece_type());
             }
             if m.get_flag() == MoveFlag::PromoteQueen {
-                move_scope_quess = 10 * value::get_piece_value(PieceType::Queen);
+                move_scope_guess = value::get_piece_value(PieceType::Queen);
             }
-            if current_best <= move_scope_quess {
-                current_best = move_scope_quess;
-                moves.swap(0, idx);
+
+            // perform a swap
+            if current_best <= move_scope_guess {
+                current_best = move_scope_guess;
+                unsafe {
+                    moves.swap_unchecked(start_index, idx);
+                }
             }
         }
 
-        // Use the moves from the PV to order them on top.
-        if let Some(pv_move) = self.pv.pop_front() {
-            if let Some(position) = moves.iter().position(|m| m == &pv_move) {
-                moves.swap(0, position);
-            }
-        }
     }
 
     fn zw_search(&mut self, beta: i32, depth: i32) -> i32 {
