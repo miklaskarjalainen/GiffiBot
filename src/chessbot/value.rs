@@ -161,7 +161,7 @@ impl GiffiBot {
         return eval*perspective;
     }
 
-    // r1bq1rk1/pp1p1ppp/2p2n2/2b5/3NP3/N1P2P2/PP4PP/R1BQK2R b KQ - 1 10 
+    #[inline(always)]
     pub fn contains_multiple_pawns_this_file(&self, color: PieceColor, square: i32) -> bool {
         let file = BoardHelper::get_file(square);
         let mask = (A_FILE << file) ^ (1 << square);
@@ -169,6 +169,7 @@ impl GiffiBot {
         (mask & pawns) != 0
     }
 
+    #[inline(always)]
     pub fn is_passed_pawn(&self, color: PieceColor, square: i32) -> bool {
         let mask = PASSED_PAWN_MASK[color as usize][square as usize];
         let enemy_pawns = self.board.bitboards[(color.flipped() as usize) * 6];
@@ -186,3 +187,45 @@ impl GiffiBot {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::sync::{Arc, atomic::AtomicBool};
+
+    #[test]
+    fn is_passed_pawn_test1() {
+        let mut board = ChessBoard::new();
+        board.parse_fen("k7/3p3p/8/2p5/2P5/8/5P2/K7 w - - 0 1").expect("valid fen");
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let bot = GiffiBot::new(board, stop);
+        
+        assert_eq!(bot.is_passed_pawn(PieceColor::White, Square::F2 as i32), true);
+        assert_eq!(bot.is_passed_pawn(PieceColor::White, Square::C4 as i32), false);
+
+        assert_eq!(bot.is_passed_pawn(PieceColor::Black, Square::D7 as i32), false);
+        assert_eq!(bot.is_passed_pawn(PieceColor::Black, Square::C5 as i32), false);
+        assert_eq!(bot.is_passed_pawn(PieceColor::Black, Square::H2 as i32), true);
+    }
+
+    #[test]
+    fn contains_multiple_pawns_this_file_test1() {
+        let mut board = ChessBoard::new();
+        board.parse_fen("k7/4ppp1/5pp1/8/8/5P2/4PPP1/K7 w - - 0 1").expect("valid fen");
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let bot = GiffiBot::new(board, stop);
+        
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::White, Square::E2 as i32), false);
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::White, Square::F2 as i32), true);
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::White, Square::F3 as i32), true);
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::White, Square::G2 as i32), false);
+        
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::Black, Square::E7 as i32), false);
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::Black, Square::F6 as i32), true);
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::Black, Square::F7 as i32), true);
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::Black, Square::G6 as i32), true);
+        assert_eq!(bot.contains_multiple_pawns_this_file(PieceColor::Black, Square::G7 as i32), true);
+    }
+
+}
