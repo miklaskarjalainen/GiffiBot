@@ -1,7 +1,7 @@
 mod chessbot;
 mod uci;
 
-use bitschess::chessboard::board::fen::STARTPOS_FEN;
+use bitschess::prelude::*;
 use uci::UCIEngine;
 
 fn main() {
@@ -22,4 +22,5 @@ fn main() {
             }
         }
     }
+
 }

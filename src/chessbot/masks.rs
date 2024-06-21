@@ -1,8 +1,6 @@
 use lazy_static::lazy_static;
 
-use bitschess::chessboard::piece::PieceColor;
-use bitschess::chessboard::bitboard::*;
-use bitschess::chessboard::board_helper::BoardHelper;
+use bitschess::prelude::*;
 
 
 lazy_static! {

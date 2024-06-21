@@ -1,11 +1,12 @@
 mod transposition_table;
 pub mod masks;
 
-use std::sync::{ Arc, atomic::{AtomicBool, Ordering}};
+use std::{sync::{ atomic::{AtomicBool, Ordering}, Arc}};
 use std::collections::VecDeque;
 use std::time::Duration;
 
 use bitschess::prelude::*;
+use bitschess::*;
 use transposition_table::{TranspositionTable, NodeKind};
 use masks::PASSED_PAWN_MASK;
 
@@ -88,7 +89,7 @@ const KING_POSITION_END: [i32; 64] = [
     -50, -30, -30, -30, -30, -30, -30, -50
 ];
 
-const CENTER_MANHATTAN_DISTANCE: [i32; 64] = [ // char is sufficient as well, also unsigned
+const CENTER_MANHATTAN_DISTANCE: [i32; 64] = [
     6, 5, 4, 3, 3, 4, 5, 6,
     5, 4, 3, 2, 2, 3, 4, 5,
     4, 3, 2, 1, 1, 2, 3, 4,
@@ -131,20 +132,20 @@ impl GiffiBot {
     }
 
     pub fn is_end_game(&self) -> bool {
-        let bishops = self.board.bitboards[PieceType::Bishop.get_side_index(PieceColor::White)].get_bits() | self.board.bitboards[PieceType::Bishop.get_side_index(PieceColor::Black)].get_bits(); 
-        let rooks   = self.board.bitboards[PieceType::Rook  .get_side_index(PieceColor::White)].get_bits() | self.board.bitboards[PieceType::Rook  .get_side_index(PieceColor::Black)].get_bits(); 
-        let queens  = self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::White)].get_bits() | self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::Black)].get_bits(); 
+        let bishops = self.board.bitboards[PieceType::Bishop.get_side_index(PieceColor::White)] | self.board.bitboards[PieceType::Bishop.get_side_index(PieceColor::Black)];
+        let rooks   = self.board.bitboards[PieceType::Rook  .get_side_index(PieceColor::White)] | self.board.bitboards[PieceType::Rook  .get_side_index(PieceColor::Black)];
+        let queens  = self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::White)] | self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::Black)];
 
         // Trigger under 4 rooks
         const MATERIAL_4_ROOKS: i32 = PieceType::Rook.get_value() * 4;
-        let material_count = (BoardHelper::count_bits(bishops) * PieceType::Bishop.get_value()) + (BoardHelper::count_bits(rooks) * PieceType::Rook.get_value()) + (BoardHelper::count_bits(queens) * PieceType::Queen.get_value());
+        let material_count = (bishops.count_ones() as i32 * PieceType::Bishop.get_value()) + (rooks.count_ones() as i32 * PieceType::Rook.get_value()) + (queens.count_ones() as i32 * PieceType::Queen.get_value());
         material_count < MATERIAL_4_ROOKS
     } 
 
     pub fn evaluate(&self) -> i32 {
         let mut eval = 0i32;
 
-        let mut all_pieces = self.board.side_bitboards[0].get_bits() | self.board.side_bitboards[1].get_bits();
+        let mut all_pieces = self.board.side_bitboards[0] | self.board.side_bitboards[1];
         let end_game = self.is_end_game();
 
         while all_pieces != 0 {
@@ -188,10 +189,10 @@ impl GiffiBot {
             }
 
             if piece.is_black() {
-                eval -= piece.get_piece_value() + positional_scoring;
+                eval -= piece.get_piece_type().get_value() + positional_scoring;
             }
             else {
-                eval += piece.get_piece_value() + positional_scoring;
+                eval += piece.get_piece_type().get_value() + positional_scoring;
             }
         }
         
@@ -203,13 +204,13 @@ impl GiffiBot {
     pub fn contains_multiple_pawns_this_file(&self, color: PieceColor, square: i32) -> bool {
         let file = BoardHelper::get_file(square);
         let mask = (A_FILE << file) ^ (1 << square);
-        let pawns = self.board.bitboards[(color as usize) * 6].get_bits();
+        let pawns = self.board.bitboards[(color as usize) * 6];
         (mask & pawns) != 0
     }
 
     pub fn is_passed_pawn(&self, color: PieceColor, square: i32) -> bool {
         let mask = PASSED_PAWN_MASK[color as usize][square as usize];
-        let enemy_pawns = self.board.bitboards[(color.flipped() as usize) * 6].get_bits();
+        let enemy_pawns = self.board.bitboards[(color.flipped() as usize) * 6];
         (mask & enemy_pawns) == 0
     }
 
@@ -217,8 +218,8 @@ impl GiffiBot {
     pub fn rooks_connected(&self, color: PieceColor, square: i32) -> bool {
         let color_index = (color as usize) * 6;
 
-        let ally_rooks_and_queens = self.board.bitboards[color_index + 3].get_bits() | self.board.bitboards[color_index + 4].get_bits();
-        let blockers = (self.board.side_bitboards[0].get_bits() | self.board.side_bitboards[1].get_bits()) ^ ally_rooks_and_queens;
+        let ally_rooks_and_queens = self.board.bitboards[color_index + 3] | self.board.bitboards[color_index + 4];
+        let blockers = (self.board.side_bitboards[0] | self.board.side_bitboards[1]) ^ ally_rooks_and_queens;
         let mask = magics::get_rook_magic(square, blockers);
         (mask & ally_rooks_and_queens) != 0
     }
@@ -252,33 +253,34 @@ impl GiffiBot {
         alpha
     }
 
-    fn order_moves(&mut self, moves: &mut Vec<Move>) {
+    fn order_moves(&mut self, moves: &mut MoveContainer) {
+        use std::mem::swap;
+
         let mut current_best = 0;
+
         for idx in 0..moves.len() {
-            let m = moves.get(idx).unwrap();
+            let m = unsafe { moves.get_unchecked(idx) };
             let move_piece = self.board.get_piece(m.get_from_idx());
             let capture_piece = self.board.get_piece(m.get_to_idx());
 
             let mut move_scope_quess = 0;
             
             if !capture_piece.is_none() {
-                move_scope_quess = 10 * (capture_piece.get_piece_value() - move_piece.get_piece_value());
+                move_scope_quess = 10 * (capture_piece.get_piece_type().get_value() - move_piece.get_piece_type().get_value());
             }
             if m.get_flag() == MoveFlag::PromoteQueen {
                 move_scope_quess = 10 * PieceType::Queen.get_value();
             }
             if current_best <= move_scope_quess {
                 current_best = move_scope_quess;
-                let m = moves.remove(idx);
-                moves.insert(0, m);
+                moves.swap(0, idx);
             }
         }
 
         // Use the moves from the PV to order them on top.
         if let Some(pv_move) = self.pv.pop_front() {
             if let Some(position) = moves.iter().position(|m| m == &pv_move) {
-                moves.remove(position);
-                moves.insert(0, pv_move);
+                moves.swap(0, position);
             }
         }
     }
