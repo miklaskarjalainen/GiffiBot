@@ -1,0 +1,5 @@
+[build]
+jobs = 4                      # number of parallel jobs, defaults to # of CPUs
+rustc = "rustc"               # the rust compiler tool
+rustflags = ["-C", "target-cpu=native"]        # custom flags to pass to all compiler invocations
+incremental = true            # whether or not to enable incremental compilation
