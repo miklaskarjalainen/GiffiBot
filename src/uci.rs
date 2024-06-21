@@ -1,5 +1,5 @@
 
-use std::sync::{ Arc, atomic::AtomicBool};
+use std::sync::{atomic::AtomicBool, Arc};
 
 use bitschess::prelude::*;
 use crate::chessbot::GiffiBot;
@@ -12,6 +12,8 @@ pub enum UciParseError {
 pub struct UCIEngine {
     pub board: ChessBoard,
     stop_search: Arc<AtomicBool>,
+
+    option_movetime: Option<std::time::Duration>,
 }
 
 impl UCIEngine {
@@ -19,6 +21,8 @@ impl UCIEngine {
         Self {
             stop_search: Arc::new(AtomicBool::new(false)),
             board: ChessBoard::new(),
+            
+            option_movetime: None,
         }
     }
 
@@ -29,7 +33,7 @@ impl UCIEngine {
             match cmd {
                 // Dev commands
                 "undo" => {
-                    self.board.unmake_move();
+                    let _ = self.board.unmake_move();
                 }
                 "fen" => {
                     println!("FEN {}", self.board.to_fen());
@@ -42,6 +46,7 @@ impl UCIEngine {
                 "uci" => {
                     println!("id name GiffiBot");
                     println!("id author Miklas ('Giffi') Karjalainen");
+                    println!("option name movetime type spin default 0 min 100 max 10000");
                     println!("uciok");
                 }
                 "isready" => {
@@ -54,6 +59,44 @@ impl UCIEngine {
                     return self.parse_position(&mut args);
                 }
 
+                "setoption" => {
+                    if args.next() != Some("name") {
+                        return Err(UciParseError::InvalidSyntax);
+                    }
+
+                    let option_id = args.next();
+                    if option_id.is_none() {
+                        return Err(UciParseError::InvalidSyntax);
+                    }
+                    if args.next() != Some("value") {
+                        return Ok(());
+                    }
+                    if args.peek().is_none() {
+                        return Err(UciParseError::InvalidSyntax);
+                    }
+
+                    match option_id.unwrap() {
+                        "movetime" => {
+                            let arg = str::parse::<u64>(args.next().unwrap());
+                            if let Ok(arg) = arg {
+                                if arg == 0 {
+                                    self.option_movetime = None;
+                                }
+                                else {
+                                    self.option_movetime = Some(
+                                        std::time::Duration::from_millis(arg)
+                                    );
+                                }
+                                return Ok(());
+                            }
+                            return Err(UciParseError::InvalidSyntax);
+                        }
+
+                        _ => {
+                            return Ok(());
+                        }
+                    }
+                }
                 "go" => {
                     // Prepare to start search
                     use std::sync::atomic::Ordering;
@@ -61,6 +104,15 @@ impl UCIEngine {
                     let board_copy = self.board.clone();
                     let cancelled_copy = Arc::clone(&self.stop_search);
 
+                    if let Some(time) = self.option_movetime {
+                        let _ = std::thread::spawn(move || {
+                            let mut bot = GiffiBot::new(board_copy, cancelled_copy);
+                            bot.calculate_time(time);
+                        });
+                        return Ok(());
+                    }
+
+                    // TODO: REDO THIS
                     while args.peek().is_some() {
                         let argument = args.next().unwrap();
 
@@ -110,10 +162,18 @@ impl UCIEngine {
                             }
 
                             "infinite" => {
+                                /*
                                 let _ = std::thread::spawn(move || {
                                     let mut bot = GiffiBot::new(board_copy, cancelled_copy);
                                     bot.calculate();
                                 });
+                                */
+                                let search_time = std::time::Duration::from_millis(500);
+                                let _ = std::thread::spawn(move || {
+                                    let mut bot = GiffiBot::new(board_copy, cancelled_copy);
+                                    bot.calculate_time(search_time);
+                                });
+                                
                                 return Ok(());
                             }
 
