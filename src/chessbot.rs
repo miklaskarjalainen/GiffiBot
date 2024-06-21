@@ -1,109 +1,16 @@
-mod transposition_table;
+pub mod go;
 pub mod masks;
+pub mod value;
 
-use std::{sync::{ atomic::{AtomicBool, Ordering}, Arc}};
+mod transposition_table;
+
+use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
 use std::collections::VecDeque;
-use std::time::Duration;
 
 use bitschess::prelude::*;
-use bitschess::*;
 use transposition_table::{TranspositionTable, NodeKind};
-use masks::PASSED_PAWN_MASK;
-
-const MAX_DEPTH: i32 = 256; // there is no way we're reaching depth 256 in our lifetime :D
-
-const PAWN_POSITION: [i32; 64] = [
-    0,  0, 0, 0, 0, 0, 0, 0,
-    100, 100, 100, 100, 100, 100, 100, 100,
-    20, 10, 40, 60, 60, 40, 20, 20,
-    5,  5, 25, 40, 40, 25, 5,  5,
-    0, 0, 0, 35, 35, 0, 0, 0,
-    5, -5,-10, 0, 0,-10, -5, 5,
-    5, 10, 10,-20,-20, 10, 10, 5,
-    0, 0, 0, 0, 0, 0, 0, 0,
-];
-
-const KNIGHT_POSITION: [i32; 64] = [
-    -50,-40,-30,-30,-30,-30,-40,-50,
-    -40,-20,  0,  0,  0,  0,-20,-40,
-    -30,  0, 10, 15, 15, 10,  0,-30,
-    -30,  5, 15, 20, 20, 15,  5,-30,
-    -30,  5, 15, 20, 20, 15,  5,-30,
-    -30,  0, 10, 15, 15, 10,  0,-30,
-    -40,-20,  0,  5,  5,  0,-20,-40,
-    -50,-40,-30,-30,-30,-30,-40,-50,
-];
-
-const BISHOP_POSITION: [i32; 64] = [
-    -20,-10,-10,-10,-10,-10,-10,-20,
-    -10,  0,  0,  0,  0,  0,  0,-10,
-    -10,  0,  5, 10, 10,  5,  0,-10,
-    -10, 30,  5, 10, 10,  5,  30,-10,
-    -10,  0, 10, 10, 10, 10,  0,-10,
-    -10, 10, 10, 10, 10, 10, 10,-10,
-    -10,  5,  0,  0,  0,  0,  5,-10,
-    -20,-10,-10,-10,-10,-10,-10,-20,
-];
-
-const ROOK_POSITION: [i32; 64] = [
-    0,  0,  0,  0,  0,  0,  0,  0,
-    5, 10, 10, 10, 10, 10, 10,  5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    0,  0,  0,  25,  25,  0,  0,  0
-];
-
-const QUEEN_POSITION: [i32; 64] = [
-    -20,-10,-10, -5, -5,-10,-10,-20,
-    -10,  0,  0,  0,  0,  0,  0,-10,
-    -10,  0,  5,  5,  5,  5,  0,-10,
-    -5,  0,  5,  5,  5,  5,  0, -5,
-    -5,  0,  5,  5,  5,  5,  0, -5,
-    -10,  5,  5,  5,  5,  5,  0,-10,
-    -10,  0,  5,  0,  0,  0,  0,-10,
-    -20,-10,-10, -5, -5,-10,-10,-20
-];
-
-const KING_POSITION: [i32; 64] = [
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -20, -30, -30, -40, -40, -30, -30, -20,
-    -10, -20, -20, -20, -20, -20, -20, -10,
-    20,  20,   0,   0,   0,   0,  20,  20,
-    20,  30,  10,   0,   0,  10,  30,  20,
-];
-
-const KING_POSITION_END: [i32; 64] = [
-    -20, -10, -10, -10, -10, -10, -10, -20,
-    -5,    0,   5,   5,   5,   5,   0,  -5,
-    -10,  -5,  20,  30,  30,  20,  -5, -10,
-    -15, -10,  35,  45,  45,  35, -10, -15,
-    -20, -15,  30,  40,  40,  30, -15, -20,
-    -25, -20,  25,  25,  25,  20, -20, -25,
-    -30, -25,   0,   0,   0,   0, -25, -30,
-    -50, -30, -30, -30, -30, -30, -30, -50
-];
-
-const CENTER_MANHATTAN_DISTANCE: [i32; 64] = [
-    6, 5, 4, 3, 3, 4, 5, 6,
-    5, 4, 3, 2, 2, 3, 4, 5,
-    4, 3, 2, 1, 1, 2, 3, 4,
-    3, 2, 1, 0, 0, 1, 2, 3,
-    3, 2, 1, 0, 0, 1, 2, 3,
-    4, 3, 2, 1, 1, 2, 3, 4,
-    5, 4, 3, 2, 2, 3, 4, 5,
-    6, 5, 4, 3, 3, 4, 5, 6
-];
 
 const MAX_MOVE_EXTENSIONS: u8 = 15;
-const DOUBLED_PAWN_PENALTY: i32 = 15; // applied per pawn a file. Doubled gets penalty applied twice and triple gets trice. 
-const PASSED_PAWN_REWARD: i32 = 25;
-const ROOKS_CONNECTED_REWARD: i32 = 80;
 
 #[derive(Debug, Clone)]
 pub struct GiffiBot {
@@ -137,92 +44,13 @@ impl GiffiBot {
         let queens  = self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::White)] | self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::Black)];
 
         // Trigger under 4 rooks
-        const MATERIAL_4_ROOKS: i32 = PieceType::Rook.get_value() * 4;
-        let material_count = (bishops.count_ones() as i32 * PieceType::Bishop.get_value()) + (rooks.count_ones() as i32 * PieceType::Rook.get_value()) + (queens.count_ones() as i32 * PieceType::Queen.get_value());
+        const MATERIAL_4_ROOKS: i32 = value::get_piece_value(PieceType::Rook) * 4;
+        let material_count =
+            (bishops.count_ones() as i32 * value::get_piece_value(PieceType::Bishop)) +
+            (rooks.count_ones() as i32 * value::get_piece_value(PieceType::Rook)) +
+            (queens.count_ones() as i32 * value::get_piece_value(PieceType::Queen));
         material_count < MATERIAL_4_ROOKS
     } 
-
-    pub fn evaluate(&self) -> i32 {
-        let mut eval = 0i32;
-
-        let mut all_pieces = self.board.side_bitboards[0] | self.board.side_bitboards[1];
-        let end_game = self.is_end_game();
-
-        while all_pieces != 0 {
-            let square = BoardHelper::bitscan_forward(all_pieces);
-            all_pieces ^= 1u64 << square;
-
-            let piece = self.board.get_piece(square);
-            let position = if piece.get_color() == PieceColor::Black { square } else { 63-square };
-            let positional_scoring;
-
-            match piece.get_piece_type() {
-                PieceType::Pawn => {
-                    let color = piece.get_color();
-                    let penalty = if self.contains_multiple_pawns_this_file(color, square) { DOUBLED_PAWN_PENALTY } else { 0 };
-                    let passed = if self.is_passed_pawn(color, square) {PASSED_PAWN_REWARD} else { 0 };
-                    
-                    positional_scoring = PAWN_POSITION[position as usize] + passed - penalty;
-                }
-                PieceType::Knight => {
-                    positional_scoring = KNIGHT_POSITION[position as usize];
-                }
-                PieceType::Bishop => {
-                    positional_scoring = BISHOP_POSITION[position as usize];
-                }
-                PieceType::Rook => {
-                    positional_scoring = ROOK_POSITION[position as usize];//+ bonus;
-                }
-                PieceType::Queen => {
-                    positional_scoring = QUEEN_POSITION[position as usize]; //+ bonus;
-                }
-                PieceType::King => {
-                    if !end_game {
-                        positional_scoring = KING_POSITION[position as usize];
-                    }
-                    else {
-                        // In endgames, prefer having king in the middle and forcing the enemy king into the corner or edge.
-                        positional_scoring = KING_POSITION_END[position as usize] + CENTER_MANHATTAN_DISTANCE[self.board.get_king_square(piece.get_color().flipped()) as usize] * 10;
-                    }
-                }
-                _ => { positional_scoring = 0; }
-            }
-
-            if piece.is_black() {
-                eval -= piece.get_piece_type().get_value() + positional_scoring;
-            }
-            else {
-                eval += piece.get_piece_type().get_value() + positional_scoring;
-            }
-        }
-        
-        let perspective = if self.board.get_turn() == PieceColor::White {1} else {-1};
-        return eval*perspective;
-    }
-
-    // r1bq1rk1/pp1p1ppp/2p2n2/2b5/3NP3/N1P2P2/PP4PP/R1BQK2R b KQ - 1 10 
-    pub fn contains_multiple_pawns_this_file(&self, color: PieceColor, square: i32) -> bool {
-        let file = BoardHelper::get_file(square);
-        let mask = (A_FILE << file) ^ (1 << square);
-        let pawns = self.board.bitboards[(color as usize) * 6];
-        (mask & pawns) != 0
-    }
-
-    pub fn is_passed_pawn(&self, color: PieceColor, square: i32) -> bool {
-        let mask = PASSED_PAWN_MASK[color as usize][square as usize];
-        let enemy_pawns = self.board.bitboards[(color.flipped() as usize) * 6];
-        (mask & enemy_pawns) == 0
-    }
-
-    // TODO
-    pub fn rooks_connected(&self, color: PieceColor, square: i32) -> bool {
-        let color_index = (color as usize) * 6;
-
-        let ally_rooks_and_queens = self.board.bitboards[color_index + 3] | self.board.bitboards[color_index + 4];
-        let blockers = (self.board.side_bitboards[0] | self.board.side_bitboards[1]) ^ ally_rooks_and_queens;
-        let mask = magics::get_rook_magic(square, blockers);
-        (mask & ally_rooks_and_queens) != 0
-    }
 
     fn search_all_captures(&mut self, mut alpha: i32, beta: i32) -> i32 {
         if self.search_cancelled.load(Ordering::Relaxed) {
@@ -242,7 +70,7 @@ impl GiffiBot {
             self.iterations += 1;
             self.board.make_move(m, true);
             eval = -self.search_all_captures(-beta, -alpha);
-            self.board.unmake_move();
+            let _ = self.board.unmake_move();
             
             if eval >= beta {
                 return beta;
@@ -254,8 +82,6 @@ impl GiffiBot {
     }
 
     fn order_moves(&mut self, moves: &mut MoveContainer) {
-        use std::mem::swap;
-
         let mut current_best = 0;
 
         for idx in 0..moves.len() {
@@ -266,10 +92,10 @@ impl GiffiBot {
             let mut move_scope_quess = 0;
             
             if !capture_piece.is_none() {
-                move_scope_quess = 10 * (capture_piece.get_piece_type().get_value() - move_piece.get_piece_type().get_value());
+                move_scope_quess = 10 * (value::get_piece_value(capture_piece.get_piece_type()) - value::get_piece_value(move_piece.get_piece_type()));
             }
             if m.get_flag() == MoveFlag::PromoteQueen {
-                move_scope_quess = 10 * PieceType::Queen.get_value();
+                move_scope_quess = 10 * value::get_piece_value(PieceType::Queen);
             }
             if current_best <= move_scope_quess {
                 current_best = move_scope_quess;
@@ -300,7 +126,7 @@ impl GiffiBot {
             self.iterations += 1;
             self.board.make_move(m, true);
             let eval = -self.zw_search(1-beta, depth - 1);
-            self.board.unmake_move();
+            let _ = self.board.unmake_move();
             if eval >= beta {
                 return beta;   // fail-hard beta-cutoff
             }
@@ -371,7 +197,7 @@ impl GiffiBot {
                     eval = -self.search(-beta, -alpha, depth - 1 + (extension as i32), ply_from_root + 1, &mut pv, extension_count + extension);
                 }
             }
-            self.board.unmake_move();
+            let _ = self.board.unmake_move();
 
             if self.search_cancelled.load(Ordering::Relaxed) {
                 return 0;
@@ -390,71 +216,4 @@ impl GiffiBot {
         *line = pv;
         alpha
     }
-    
-    /// Calculates until search_cancelled is set to true
-    #[inline(always)]
-    pub fn calculate(&mut self) {
-        self.calculate_depth(MAX_DEPTH);
-    }
-
-    #[inline(always)]
-    pub fn calculate_time(&mut self, time: std::time::Duration) {
-        const CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
-
-        let copy_cancel = Arc::clone(&self.search_cancelled);
-
-        let handle = std::thread::spawn(move || {
-            let start = std::time::Instant::now();
-            
-            loop {
-                std::thread::sleep(CHECK_INTERVAL);
-                
-                // already set to true, before time ran out (most likely user manually called 'stop')
-                if copy_cancel.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                // slept for the target amount
-                let slept_for = std::time::Instant::now() - start;
-                if slept_for >= time {
-                    copy_cancel.store(true, Ordering::Relaxed);
-                    break;
-                }
-            }
-        });
-
-        self.calculate_depth(MAX_DEPTH);
-        let _ = handle.join();
-    }
-
-    pub fn calculate_depth(&mut self, depth: i32) {
-        self.iterations = 0;
-        self.search_begin = std::time::Instant::now();
-        self.completed_depth = 0;
-        let mut best_completed_line = VecDeque::new();
-
-        for depth in 1..=depth {
-            let mut line = VecDeque::new();
-            let perspective = if self.board.get_turn() == PieceColor::White { 1 } else { -1 };
-            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line, 0) * perspective;
-
-            if self.search_cancelled.load(Ordering::Relaxed) {
-                break;
-            }
-            
-            // if search was cancelled, the line is going to be incomplete
-            best_completed_line = line;
-            self.pv = best_completed_line.clone();
-            self.completed_depth = depth;
-            
-            // Stats
-            let end = std::time::Instant::now();
-            let duration = end - self.search_begin;
-            println!("info depth {} score cp {} currmove {} iterations {} duration_from_go {}", depth, score, self.pv.front().unwrap().to_uci(), self.iterations, duration.as_secs_f32()); 
-        }
-        self.pv = best_completed_line;
-
-        println!("bestmove {}", self.pv.front().cloned().unwrap().to_uci());
-    }
-
 }

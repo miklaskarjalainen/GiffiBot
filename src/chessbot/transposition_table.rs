@@ -1,6 +1,3 @@
-
-use bitschess::prelude::*;
-
 const SIZE_IN_MB: u64 = 64;
 const ENTRY_COUNT: u64 = (1024*1024*SIZE_IN_MB) / (std::mem::size_of::<TranspositionEntry>() as u64);
 

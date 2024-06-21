@@ -1,5 +1,6 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
+use std::time::Duration;
 
 use bitschess::prelude::*;
 use crate::chessbot::GiffiBot;
@@ -13,7 +14,7 @@ pub struct UCIEngine {
     pub board: ChessBoard,
     stop_search: Arc<AtomicBool>,
 
-    option_movetime: Option<std::time::Duration>,
+    option_movetime: Option<Duration>,
 }
 
 impl UCIEngine {
@@ -83,9 +84,7 @@ impl UCIEngine {
                                     self.option_movetime = None;
                                 }
                                 else {
-                                    self.option_movetime = Some(
-                                        std::time::Duration::from_millis(arg)
-                                    );
+                                    self.option_movetime = Some(Duration::from_millis(arg));
                                 }
                                 return Ok(());
                             }
@@ -107,7 +106,7 @@ impl UCIEngine {
                     if let Some(time) = self.option_movetime {
                         let _ = std::thread::spawn(move || {
                             let mut bot = GiffiBot::new(board_copy, cancelled_copy);
-                            bot.calculate_time(time);
+                            bot.go_timed(time);
                         });
                         return Ok(());
                     }
@@ -133,10 +132,10 @@ impl UCIEngine {
                                     return Err(UciParseError::InvalidSyntax);
                                 }
 
-                                let search_time = std::time::Duration::from_millis(time.unwrap());
+                                let search_time = Duration::from_millis(time.unwrap());
                                 let _ = std::thread::spawn(move || {
                                     let mut bot = GiffiBot::new(board_copy, cancelled_copy);
-                                    bot.calculate_time(search_time);
+                                    bot.go_timed(search_time);
                                 });
 
                                 return Ok(());
@@ -155,25 +154,17 @@ impl UCIEngine {
                                 let search_depth = depth.unwrap();
                                 let _ = std::thread::spawn(move || {
                                     let mut bot = GiffiBot::new(board_copy, cancelled_copy);
-                                    bot.calculate_depth(search_depth);
+                                    bot.go_depth(search_depth);
                                 });
 
                                 return Ok(());
                             }
 
                             "infinite" => {
-                                /*
                                 let _ = std::thread::spawn(move || {
                                     let mut bot = GiffiBot::new(board_copy, cancelled_copy);
-                                    bot.calculate();
+                                    bot.go_infinite();
                                 });
-                                */
-                                let search_time = std::time::Duration::from_millis(500);
-                                let _ = std::thread::spawn(move || {
-                                    let mut bot = GiffiBot::new(board_copy, cancelled_copy);
-                                    bot.calculate_time(search_time);
-                                });
-                                
                                 return Ok(());
                             }
 
@@ -198,9 +189,10 @@ impl UCIEngine {
                         }
                     }    
 
+                    const NON_ARG_THINK_TIME: Duration = Duration::from_millis(500);
                     let _ = std::thread::spawn(move || {
                         let mut bot = GiffiBot::new(board_copy, cancelled_copy);
-                        bot.calculate_time(std::time::Duration::from_millis(100));
+                        bot.go_timed(NON_ARG_THINK_TIME);
                     });
                     return Ok(());                
                 }
@@ -249,8 +241,7 @@ impl UCIEngine {
                 "moves" => { 
                     for chessmove in arg_iter {
                         if chessmove.is_empty() { continue; }
-
-                        self.board.make_move_uci(chessmove);                        
+                        let _ = self.board.make_move_uci(chessmove);                        
                     }
                 }
                 _ => { return Err(UciParseError::InvalidSyntax); }
