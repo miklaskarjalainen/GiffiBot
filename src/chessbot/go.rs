@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -6,7 +5,7 @@ use std::time::Duration;
 use super::GiffiBot;
 use bitschess::prelude::*;
 
-const MAX_DEPTH: i32 = 256; // there is no way we're reaching depth 256 in our lifetime :D
+pub const MAX_DEPTH: usize = 256; // there is no way we're reaching depth 256 in our lifetime :D
 
 impl GiffiBot {
 
@@ -46,16 +45,18 @@ impl GiffiBot {
         let _ = handle.join();
     }
 
-    pub fn go_depth(&mut self, depth: i32) {
+    pub fn go_depth(&mut self, depth: usize) {
+        use super::DequeType;
+
         self.iterations = 0;
         self.search_begin = std::time::Instant::now();
         self.completed_depth = 0;
-        let mut best_completed_line = VecDeque::new();
+        let mut best_completed_line = DequeType::new();
         
         for depth in 1..=depth {
-            let mut line = VecDeque::new();
+            let mut line = DequeType::new();
             let perspective = if self.board.get_turn() == PieceColor::White { 1 } else { -1 };
-            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line, 0) * perspective;
+            let score = self.search(-i32::MAX, i32::MAX, depth as i32, 0, &mut line, 0) * perspective;
             
             if self.search_cancelled.load(Ordering::Relaxed) {
                 break;

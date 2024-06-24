@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 bitschess = { git = "https://github.com/miklaskarjalainen/BitsChess.git", rev = "e621869" }
+heapless = "0.8.0"
 lazy_static = "1.4.0"

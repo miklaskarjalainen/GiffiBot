@@ -5,12 +5,13 @@ pub mod value;
 mod transposition_table;
 
 use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
-use std::collections::VecDeque;
-
 use bitschess::prelude::*;
 use transposition_table::{TranspositionTable, NodeKind};
+use go::MAX_DEPTH;
 
 const MAX_MOVE_EXTENSIONS: u8 = 15;
+
+pub type DequeType = heapless::Deque<Move, MAX_DEPTH>;
 
 #[derive(Debug, Clone)]
 pub struct GiffiBot {
@@ -18,8 +19,8 @@ pub struct GiffiBot {
     search_cancelled: Arc<AtomicBool>,
 
     iterations: u64,
-    completed_depth: i32,
-    pv: VecDeque<Move>,
+    completed_depth: usize,
+    pv: DequeType,
 
     search_begin: std::time::Instant,
 }
@@ -32,7 +33,7 @@ impl GiffiBot {
             iterations: 0,
             search_cancelled: stop_search,
             completed_depth: 0,
-            pv: VecDeque::new(),
+            pv: DequeType::new(),
 
             search_begin: std::time::Instant::now(),
         }
@@ -155,7 +156,7 @@ impl GiffiBot {
     }
     
     // https://www.reddit.com/r/chessprogramming/comments/m2m048/how_does_a_triangular_pvtable_work/
-    fn search(&mut self, mut alpha: i32, beta:i32, depth: i32, ply_from_root: i32, line: &mut VecDeque<Move>, extension_count: u8) -> i32 {
+    fn search(&mut self, mut alpha: i32, beta:i32, depth: i32, ply_from_root: i32, line: &mut DequeType, extension_count: u8) -> i32 {
         if self.search_cancelled.load(Ordering::Relaxed) {
             return 0;
         }
@@ -180,7 +181,7 @@ impl GiffiBot {
 
         self.order_moves(&mut moves);
 
-        let mut pv = VecDeque::new();
+        let mut pv = DequeType::new();
         let mut do_pv_search = true;
         for m in moves {
             let extension = self.get_extension(m, extension_count);
@@ -214,7 +215,7 @@ impl GiffiBot {
             if eval > alpha {
                 do_pv_search = false;
                 alpha = eval;
-                pv.insert(0, m.clone());
+                pv.push_front(m.clone()).expect("PV ran out of space.");
             }
         }
 

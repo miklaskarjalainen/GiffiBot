@@ -146,7 +146,7 @@ impl UCIEngine {
                                     return Err(UciParseError::InvalidSyntax);
                                 }
 
-                                let depth = args.next().unwrap().parse::<i32>();
+                                let depth = args.next().unwrap().parse::<usize>();
                                 if depth.is_err() {
                                     return Err(UciParseError::InvalidSyntax);
                                 }
