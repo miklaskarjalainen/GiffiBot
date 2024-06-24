@@ -70,7 +70,15 @@ impl GiffiBot {
             // Stats
             let end = std::time::Instant::now();
             let duration = end - self.search_begin;
-            println!("info depth {} score cp {} currmove {} iterations {} duration_from_go {}", depth, score, self.pv.front().unwrap().to_uci(), self.iterations, duration.as_secs_f32()); 
+            print!("info depth {} score cp {} currmove {} nodes {} duration_from_go {} nps {}",
+                depth, score, self.pv.front().unwrap().to_uci(), self.iterations, duration.as_secs_f32(), (self.iterations as f32 / duration.as_secs_f32()) as i32
+            ); 
+            // pv
+            print!(" pv ");
+            for m in &self.pv {
+                print!("{} ", m.to_uci());
+            }
+            print!("\n");
         }
         self.pv = best_completed_line;
         
