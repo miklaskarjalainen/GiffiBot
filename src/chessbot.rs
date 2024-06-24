@@ -38,7 +38,7 @@ impl GiffiBot {
         }
     }
 
-    pub fn is_end_game(&self) -> bool {
+    pub const fn is_end_game(&self) -> bool {
         let bishops = self.board.bitboards[PieceType::Bishop.get_side_index(PieceColor::White)] | self.board.bitboards[PieceType::Bishop.get_side_index(PieceColor::Black)];
         let rooks   = self.board.bitboards[PieceType::Rook  .get_side_index(PieceColor::White)] | self.board.bitboards[PieceType::Rook  .get_side_index(PieceColor::Black)];
         let queens  = self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::White)] | self.board.bitboards[PieceType::Queen .get_side_index(PieceColor::Black)];
