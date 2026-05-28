@@ -47,7 +47,7 @@ impl UCIEngine {
                 "uci" => {
                     println!("id name GiffiBot");
                     println!("id author Miklas ('Giffi') Karjalainen");
-                    println!("option name movetime type spin default 0 min 100 max 10000");
+                    println!("option name movetime type spin default 0 min 0 max 10000");
                     println!("uciok");
                 }
                 "isready" => {
