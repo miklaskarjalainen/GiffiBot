@@ -1,9 +1,8 @@
-
 use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
 
-use bitschess::prelude::*;
 use crate::chessbot::GiffiBot;
+use bitschess::prelude::*;
 
 #[derive(Debug)]
 pub enum UciParseError {
@@ -22,13 +21,17 @@ impl UCIEngine {
         Self {
             stop_search: Arc::new(AtomicBool::new(false)),
             board: ChessBoard::new(),
-            
+
             option_movetime: None,
         }
     }
 
-    pub fn execute_cmd(&mut self, message: &String) -> Result<(), UciParseError> {
-        let mut args = message.split(' ').collect::<Vec<&str>>().into_iter().peekable();
+    pub fn execute_cmd(&mut self, message: &str) -> Result<(), UciParseError> {
+        let mut args = message
+            .split(' ')
+            .collect::<Vec<&str>>()
+            .into_iter()
+            .peekable();
 
         if let Some(cmd) = args.next() {
             match cmd {
@@ -82,8 +85,7 @@ impl UCIEngine {
                             if let Ok(arg) = arg {
                                 if arg == 0 {
                                     self.option_movetime = None;
-                                }
-                                else {
+                                } else {
                                     self.option_movetime = Some(Duration::from_millis(arg));
                                 }
                                 return Ok(());
@@ -182,25 +184,25 @@ impl UCIEngine {
                                 self.board.perft(search_depth, true);
                                 return Ok(());
                             }
-                            
+
                             _ => {
                                 println!("UCI: unsupported argument '{}'", argument);
                             }
                         }
-                    }    
+                    }
 
                     const NON_ARG_THINK_TIME: Duration = Duration::from_millis(500);
                     let _ = std::thread::spawn(move || {
                         let mut bot = GiffiBot::new(board_copy, cancelled_copy);
                         bot.go_timed(NON_ARG_THINK_TIME);
                     });
-                    return Ok(());                
+                    return Ok(());
                 }
                 "stop" => {
                     use std::sync::atomic::Ordering;
                     self.stop_search.store(true, Ordering::Relaxed);
                 }
-                _ => { 
+                _ => {
                     return Err(UciParseError::InvalidSyntax);
                 }
             }
@@ -208,18 +210,23 @@ impl UCIEngine {
         Ok(())
     }
 
-    fn parse_position(&mut self, arg_iter: &mut std::iter::Peekable<std::vec::IntoIter<&str>>) -> Result<(), UciParseError> {        
+    fn parse_position(
+        &mut self,
+        arg_iter: &mut std::iter::Peekable<std::vec::IntoIter<&str>>,
+    ) -> Result<(), UciParseError> {
         // startpos or fen
         if let Some(arg1) = arg_iter.next() {
             match arg1 {
-                "startpos" => { 
+                "startpos" => {
                     self.board.parse_fen(STARTPOS_FEN).expect("valid fen");
                 }
                 "fen" => {
                     let mut whole_fen = String::from("");
 
                     while let Some(fen_portion) = arg_iter.peek() {
-                        if *fen_portion == "moves" { break; }
+                        if *fen_portion == "moves" {
+                            break;
+                        }
                         whole_fen.push_str(arg_iter.next().unwrap());
                         whole_fen.push(' ');
                     }
@@ -228,9 +235,10 @@ impl UCIEngine {
                         println!("FEN PARSE ERROR: {:?}", error);
                         return Err(UciParseError::InvalidSyntax);
                     }
-
                 }
-                _ => { return Err(UciParseError::InvalidSyntax); }
+                _ => {
+                    return Err(UciParseError::InvalidSyntax);
+                }
             }
         }
 
@@ -238,18 +246,20 @@ impl UCIEngine {
         if let Some(arg1) = arg_iter.next() {
             match arg1 {
                 // position startpos moves e2e4 b7b5 d2d3 b8a6 glf3 e7e5 c2c3 d8g5 h2h4
-                "moves" => { 
+                "moves" => {
                     for chessmove in arg_iter {
-                        if chessmove.is_empty() { continue; }
-                        let _ = self.board.make_move_uci(chessmove);                        
+                        if chessmove.is_empty() {
+                            continue;
+                        }
+                        let _ = self.board.make_move_uci(chessmove);
                     }
                 }
-                _ => { return Err(UciParseError::InvalidSyntax); }
+                _ => {
+                    return Err(UciParseError::InvalidSyntax);
+                }
             }
         }
 
         Ok(())
     }
-
 }
-

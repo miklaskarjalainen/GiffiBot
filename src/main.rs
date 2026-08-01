@@ -10,17 +10,14 @@ fn main() {
 
     println!("GiffiBot!");
     loop {
-
         let line = std::io::stdin().lines().next().unwrap().unwrap();
-        
+
         if &line == "quit" {
             return;
-        }
-        else {
+        } else {
             if let Err(e) = uci.execute_cmd(&line) {
                 println!("{:?}", e);
             }
         }
     }
-
 }

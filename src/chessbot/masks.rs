@@ -16,21 +16,20 @@ lazy_static! {
 fn generate_passed_pawn_mask(color: PieceColor, square: i32) -> u64 {
     let rank = BoardHelper::get_rank(square) as u32;
     let file = BoardHelper::get_file(square);
-    
+
     let mut file_mask = A_FILE << file;
     if file != 7 {
-        file_mask |= A_FILE << (file+1);
+        file_mask |= A_FILE << (file + 1);
     }
     if file != 0 {
-        file_mask |= A_FILE << (file-1);
+        file_mask |= A_FILE << (file - 1);
     }
-    
+
     let rank_mask: u64;
     if color == PieceColor::White {
-        rank_mask = (!0u64).wrapping_shl((rank+1)*8);
-    }
-    else {
-        rank_mask = (!0u64).wrapping_shr((7 - rank + 1)*8);
+        rank_mask = (!0u64).wrapping_shl((rank + 1) * 8);
+    } else {
+        rank_mask = (!0u64).wrapping_shr((7 - rank + 1) * 8);
     }
 
     rank_mask & file_mask
