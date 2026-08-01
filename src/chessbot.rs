@@ -21,7 +21,7 @@ pub struct GiffiBot {
 
     iterations: u64,
     completed_depth: i32,
-    pv: VecDeque<Move>,
+    pub pv: VecDeque<Move>,
 
     search_begin: std::time::Instant,
 }
