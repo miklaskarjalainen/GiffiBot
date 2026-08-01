@@ -46,6 +46,9 @@ impl GiffiBot {
     }
 
     pub fn go_depth(&mut self, depth: i32) {
+        // Mates are encoded as i32::MAX - (moves to mate).
+        const MATE_SCORE: i32 = i32::MAX - 512;
+
         self.iterations = 0;
         self.search_begin = std::time::Instant::now();
         self.completed_depth = 0;
@@ -58,14 +61,14 @@ impl GiffiBot {
             } else {
                 -1
             };
-            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line, 0) * perspective;
+            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line, 0);
+            let score_with_perspective = score * perspective;
 
             if self.search_cancelled.load(Ordering::Relaxed) {
                 break;
             }
 
             // if search was cancelled, the line is going to be incomplete
-
             best_completed_line = line;
             self.pv = best_completed_line.clone();
             self.completed_depth = depth;
@@ -76,7 +79,7 @@ impl GiffiBot {
             print!(
                 "info depth {} score cp {} currmove {} nodes {} duration_from_go {} nps {}",
                 depth,
-                score,
+                score_with_perspective,
                 self.pv.front().unwrap().to_uci(),
                 self.iterations,
                 duration.as_secs_f32(),
@@ -87,7 +90,12 @@ impl GiffiBot {
             for m in &self.pv {
                 print!("{} ", m.to_uci());
             }
-            print!("\n");
+            println!();
+
+            // Break if mate
+            if score >= MATE_SCORE {
+                break;
+            }
         }
         self.pv = best_completed_line;
 

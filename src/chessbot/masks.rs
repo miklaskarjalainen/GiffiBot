@@ -25,12 +25,11 @@ fn generate_passed_pawn_mask(color: PieceColor, square: i32) -> u64 {
         file_mask |= A_FILE << (file - 1);
     }
 
-    let rank_mask: u64;
-    if color == PieceColor::White {
-        rank_mask = (!0u64).wrapping_shl((rank + 1) * 8);
+    let rank_mask = if color == PieceColor::White {
+        (!0u64).wrapping_shl((rank + 1) * 8)
     } else {
-        rank_mask = (!0u64).wrapping_shr((7 - rank + 1) * 8);
-    }
+        (!0u64).wrapping_shr((7 - rank + 1) * 8)
+    };
 
     rank_mask & file_mask
 }
