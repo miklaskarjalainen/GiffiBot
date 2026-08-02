@@ -9,5 +9,5 @@ edition = "2021"
 opt-level = 1
 
 [dependencies]
-bitschess = { git = "https://github.com/miklaskarjalainen/BitsChess.git", rev = "e621869" }
+bitschess = { git = "https://github.com/miklaskarjalainen/BitsChess.git", rev = "7c7b2fd" }
 lazy_static = "1.4.0"

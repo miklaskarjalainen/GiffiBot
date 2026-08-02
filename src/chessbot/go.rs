@@ -8,6 +8,8 @@ use bitschess::prelude::*;
 
 const MAX_DEPTH: i32 = 256; // there is no way we're reaching depth 256 in our lifetime :D
 
+use super::{MATE, MATE_THRESHOLD};
+
 impl GiffiBot {
     /// Calculates until search_cancelled is set to true
     #[inline(always)]
@@ -46,9 +48,6 @@ impl GiffiBot {
     }
 
     pub fn go_depth(&mut self, depth: i32) {
-        // Mates are encoded as i32::MAX - (moves to mate).
-        const MATE_SCORE: i32 = i32::MAX - 512;
-
         self.iterations = 0;
         self.search_begin = std::time::Instant::now();
         self.completed_depth = 0;
@@ -61,10 +60,12 @@ impl GiffiBot {
             } else {
                 -1
             };
-            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line, 0);
+            let cancellable = depth > 1;
+            let score = self.search(-i32::MAX, i32::MAX, depth, 0, &mut line, 0, cancellable);
             let score_with_perspective = score * perspective;
 
-            if self.search_cancelled.load(Ordering::Relaxed) {
+            // Calculate at least one move
+            if cancellable && self.search_cancelled.load(Ordering::Relaxed) {
                 break;
             }
 
@@ -76,29 +77,52 @@ impl GiffiBot {
             // Stats
             let end = std::time::Instant::now();
             let duration = end - self.search_begin;
-            print!(
-                "info depth {} score cp {} currmove {} nodes {} duration_from_go {} nps {}",
-                depth,
-                score_with_perspective,
-                self.pv.front().unwrap().to_uci(),
-                self.iterations,
-                duration.as_secs_f32(),
-                (self.iterations as f32 / duration.as_secs_f32()) as i32
-            );
-            // pv
-            print!(" pv ");
-            for m in &self.pv {
-                print!("{} ", m.to_uci());
-            }
-            println!();
 
-            // Break if mate
-            if score >= MATE_SCORE {
-                break;
+            // Break if mate or centipawn score
+            if let Some(chess_move) = self.pv.front() {
+                print!("info depth {} ", depth);
+                if score.abs() >= MATE_THRESHOLD {
+                    let plies = MATE - score.abs();
+                    let mate_in = (plies + 1) / 2;
+                    let mate_in = if score > 0 { mate_in } else { -mate_in };
+                    print!("score mate {} ", mate_in);
+                } else {
+                    print!("score cp {} ", score_with_perspective);
+                }
+                print!(
+                    "currmove {} nodes {} duration_from_go {} nps {} ",
+                    chess_move.to_uci(),
+                    self.iterations,
+                    duration.as_secs_f32(),
+                    (self.iterations as f32 / duration.as_secs_f32()) as i32
+                );
+
+                // The full calcualted line
+                print!("pv ");
+                for m in &self.pv {
+                    print!("{} ", m.to_uci());
+                }
+                println!();
+
+                // Forced mate, we can stop calculating
+                if score.abs() >= MATE_THRESHOLD {
+                    break;
+                }
+            }
+        }
+
+        // last resort: make sure we always have a move to play
+        if best_completed_line.is_empty() {
+            if let Some(m) = self.board.get_legal_moves().get(0) {
+                best_completed_line.push_front(m);
             }
         }
         self.pv = best_completed_line;
 
-        println!("bestmove {}", self.pv.front().cloned().unwrap().to_uci());
+        if let Some(chess_move) = self.pv.front() {
+            println!("bestmove {}", chess_move.to_uci());
+        } else {
+            println!("bestmove 0000");
+        }
     }
 }
