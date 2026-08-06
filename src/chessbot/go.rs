@@ -90,10 +90,10 @@ impl GiffiBot {
                     print!("score cp {} ", score_with_perspective);
                 }
                 print!(
-                    "currmove {} nodes {} duration_from_go {} nps {} ",
+                    "currmove {} nodes {} time {} nps {} ",
                     chess_move.to_uci(),
                     self.iterations,
-                    duration.as_secs_f32(),
+                    duration.as_millis(),
                     (self.iterations as f32 / duration.as_secs_f32()) as i32
                 );
 
