@@ -1,5 +1,6 @@
 pub mod go;
 pub mod masks;
+pub mod move_ordering;
 pub mod value;
 
 mod transposition_table;
@@ -15,6 +16,7 @@ use bitschess::prelude::*;
 
 const MAX_MOVE_EXTENSIONS: u8 = 15;
 
+pub(crate) const MAX_DEPTH: i32 = 256; // there is no way we're reaching depth 256 in our lifetime :D
 pub(crate) const MATE: i32 = 30_000;
 pub(crate) const MATE_THRESHOLD: i32 = MATE - 1000;
 
@@ -26,6 +28,7 @@ pub struct GiffiBot {
     iterations: u64,
     completed_depth: i32,
     pub pv: VecDeque<Move>,
+    killers: [Move; MAX_DEPTH as usize],
 
     tt: TranspositionTable,
 
@@ -41,6 +44,7 @@ impl GiffiBot {
             search_cancelled: stop_search,
             completed_depth: 0,
             pv: VecDeque::new(),
+            killers: [Move(0); MAX_DEPTH as usize],
 
             tt: TranspositionTable::new(),
 
@@ -65,7 +69,13 @@ impl GiffiBot {
         material_count < MATERIAL_4_ROOKS
     }
 
-    fn search_all_captures(&mut self, mut alpha: i32, beta: i32, cancellable: bool) -> i32 {
+    fn search_all_captures(
+        &mut self,
+        mut alpha: i32,
+        beta: i32,
+        cancellable: bool,
+        ply_from_root: i32,
+    ) -> i32 {
         if cancellable && self.search_cancelled.load(Ordering::Relaxed) {
             return 0;
         }
@@ -77,12 +87,12 @@ impl GiffiBot {
         alpha = std::cmp::max(alpha, eval);
 
         let mut captures = self.board.get_legal_captures();
-        self.order_moves(&mut captures, Move(0));
+        self.order_moves(&mut captures, ply_from_root);
 
         for m in captures {
             self.iterations += 1;
             self.board.make_move(m, true);
-            eval = -self.search_all_captures(-beta, -alpha, cancellable);
+            eval = -self.search_all_captures(-beta, -alpha, cancellable, ply_from_root + 1);
             let _ = self.board.unmake_move();
 
             if eval >= beta {
@@ -94,48 +104,14 @@ impl GiffiBot {
         alpha
     }
 
-    fn order_moves(&mut self, moves: &mut MoveContainer, hash_move: Move) {
-        // search the hash move first, then the PV move, then the rest ordered by capture value.
-        let mut start_index = 0;
-        if hash_move != Move(0) {
-            if let Some(position) = moves.iter().position(|m| m == &hash_move) {
-                unsafe { moves.swap_unchecked(0, position) };
-                start_index = 1;
-            }
-        }
-        if let Some(pv_move) = self.pv.pop_front() {
-            if start_index < moves.len() {
-                if let Some(position) = moves.iter().position(|m| m == &pv_move) {
-                    unsafe { moves.swap_unchecked(start_index, position) };
-                    start_index += 1;
-                }
-            }
-        }
-
-        let mut current_best = 0;
-        for idx in start_index..moves.len() {
-            let m = unsafe { moves.get_unchecked(idx) };
-            let move_piece = self.board.get_piece(m.get_from_idx());
-            let capture_piece = self.board.get_piece(m.get_to_idx());
-
-            let mut move_scope_guess = 0;
-
-            if !capture_piece.is_none() {
-                move_scope_guess = value::get_piece_value(capture_piece.get_piece_type())
-                    - value::get_piece_value(move_piece.get_piece_type());
-            }
-            if m.get_flag() == MoveFlag::PromoteQueen {
-                move_scope_guess = value::get_piece_value(PieceType::Queen);
-            }
-
-            // perform a swap
-            if current_best <= move_scope_guess {
-                current_best = move_scope_guess;
-                unsafe {
-                    moves.swap_unchecked(start_index, idx);
-                }
-            }
-        }
+    fn order_moves(&mut self, moves: &mut MoveContainer, ply: i32) {
+        move_ordering::MoveOrdering::order_moves(
+            &self.board,
+            &self.tt,
+            moves,
+            self.pv.pop_front(),
+            self.killers[ply.min(MAX_DEPTH) as usize],
+        );
     }
 
     fn zw_search(&mut self, beta: i32, depth: i32, ply_from_root: i32, cancellable: bool) -> i32 {
@@ -156,7 +132,7 @@ impl GiffiBot {
             }
         }
         if depth == 0 {
-            return self.search_all_captures(beta - 1, beta, cancellable);
+            return self.search_all_captures(beta - 1, beta, cancellable, ply_from_root);
         }
 
         if self.board.is_draw() {
@@ -171,8 +147,7 @@ impl GiffiBot {
             return 0; // draw
         }
 
-        let hash_move = self.tt.get_entry_by_hash(hash);
-        self.order_moves(&mut moves, hash_move);
+        self.order_moves(&mut moves, ply_from_root);
         let mut best_move = Move(0);
         for m in moves {
             self.iterations += 1;
@@ -250,7 +225,7 @@ impl GiffiBot {
 
         if depth == 0 {
             line.clear();
-            return self.search_all_captures(alpha, beta, cancellable);
+            return self.search_all_captures(alpha, beta, cancellable, ply_from_root);
         }
 
         if self.board.is_draw() {
@@ -266,8 +241,7 @@ impl GiffiBot {
             return 0; // draw
         }
 
-        let hash_move = self.tt.get_entry_by_hash(hash);
-        self.order_moves(&mut moves, hash_move);
+        self.order_moves(&mut moves, ply_from_root);
 
         let mut best_move = Move(0);
         let mut pv = VecDeque::new();
@@ -327,6 +301,18 @@ impl GiffiBot {
                     beta.saturating_add(ply_from_root),
                     best_move,
                 );
+
+                let is_capture =
+                    self.board.get_piece(m.get_to_idx()).get_piece_type() != PieceType::None;
+
+                let is_promotion = m.get_flag() == MoveFlag::PromoteBishop
+                    || m.get_flag() == MoveFlag::PromoteKnight
+                    || m.get_flag() == MoveFlag::PromoteRook
+                    || m.get_flag() == MoveFlag::PromoteQueen;
+
+                if !is_capture && !is_promotion {
+                    self.killers[ply_from_root.min(MAX_DEPTH) as usize] = *m;
+                }
                 return beta;
             }
             if eval > alpha {

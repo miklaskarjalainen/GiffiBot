@@ -6,15 +6,13 @@ use std::time::Duration;
 use super::GiffiBot;
 use bitschess::prelude::*;
 
-const MAX_DEPTH: i32 = 256; // there is no way we're reaching depth 256 in our lifetime :D
-
 use super::{MATE, MATE_THRESHOLD};
 
 impl GiffiBot {
     /// Calculates until search_cancelled is set to true
     #[inline(always)]
     pub fn go_infinite(&mut self) {
-        self.go_depth(MAX_DEPTH);
+        self.go_depth(super::MAX_DEPTH);
     }
 
     #[inline(always)]
@@ -43,7 +41,7 @@ impl GiffiBot {
             }
         });
 
-        self.go_depth(MAX_DEPTH);
+        self.go_depth(super::MAX_DEPTH);
         let _ = handle.join();
     }
 
