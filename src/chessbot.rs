@@ -159,6 +159,10 @@ impl GiffiBot {
             return self.search_all_captures(beta - 1, beta, cancellable);
         }
 
+        if self.board.is_draw() {
+            return 0;
+        }
+
         let mut moves = self.board.get_legal_moves();
         if moves.is_empty() {
             if self.board.is_king_in_check(self.board.get_turn()) {
@@ -166,6 +170,7 @@ impl GiffiBot {
             }
             return 0; // draw
         }
+
         let hash_move = self.tt.get_entry_by_hash(hash);
         self.order_moves(&mut moves, hash_move);
         let mut best_move = Move(0);
